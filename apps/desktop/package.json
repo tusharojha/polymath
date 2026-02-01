@@ -7,7 +7,9 @@
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "preview": "electron-vite preview",
-    "start": "electron ."
+    "start": "electron .",
+    "dist": "pnpm build && electron-builder",
+    "dist:mac": "pnpm build && electron-builder --mac dmg"
   },
   "dependencies": {
     "@polymath/agents": "workspace:*",
@@ -18,9 +20,12 @@
     "framer-motion": "^12.29.2",
     "lucide-react": "^0.563.0",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "react-markdown": "^9.1.0",
+    "remark-gfm": "^4.0.1"
   },
   "devDependencies": {
+    "@tailwindcss/typography": "^0.5.19",
     "@types/node": "^24.0.0",
     "@types/react": "^19.2.10",
     "@types/react-dom": "^19.2.3",
@@ -30,6 +35,25 @@
     "postcss": "^8.5.6",
     "sql.js": "^1.10.3",
     "tailwindcss": "^3.4.19",
-    "typescript": "^5.6.0"
+    "typescript": "^5.6.0",
+    "electron-builder": "^24.13.3"
+  }
+  ,
+  "build": {
+    "appId": "com.polymath.desktop",
+    "productName": "Polymath",
+    "files": [
+      "out/**",
+      "package.json"
+    ],
+    "directories": {
+      "output": "dist"
+    },
+    "mac": {
+      "category": "public.app-category.education",
+      "target": [
+        "dmg"
+      ]
+    }
   }
 }

@@ -85,7 +85,7 @@ Return a single JSON object with this exact structure:
 
 DESIGN RULES:
 1. Use "flex" for layout. Use "className" in flexBoxProperties for Tailwind classes (e.g. "flex-col gap-4").
-2. Use "component" for leaf nodes. Supported: Heading, Text, Box, Button, Input, Select, Divider.
+2. Use "component" for leaf nodes. Supported: Heading, Text, Box, Button, Input, Select, Divider, ExperimentViewer, SvgBlock, CodeBlock.
 3. Use "className" prop for styling. Do NOT use style props like "bg", "p", "m", "color".
 4. Use standard Tailwind utility classes.
 5. Create a rich, newspaper-like layout for learning content.
@@ -101,7 +101,8 @@ CURRENT DATA:
 ${JSON.stringify({
       thesis: state.thesis?.summary,
       questions: state.questions,
-      activeStep: state.activeStep
+      activeStep: state.activeStep,
+      senseOutputs: (state.recentSignals ?? []).filter((s: any) => s.payload?.kind === "sense-output").map((s: any) => s.payload.output)
     }, null, 2)}
 
 Return ONLY valid JSON.
@@ -202,25 +203,72 @@ Return ONLY valid JSON.
 
     const title = teachingContent?.title ?? step?.title ?? state.goal?.title ?? "Learning";
     const explanation = teachingContent?.explanation ?? step?.rationale ?? "Loading content...";
+    const mediaBlocks = (teachingContent?.media || []).map((item: any, idx: number) => {
+      const title = item.title ? {
+        type: "component",
+        componentName: "Text",
+        props: { children: item.title, className: "text-xs uppercase tracking-widest text-fgSubtle" }
+      } : null;
+
+      if (item.kind === "svg" || item.kind === "diagram") {
+        return {
+          type: "flex",
+          flexBoxProperties: { className: "flex-col gap-3 p-4 rounded-xl border border-border bg-surface" },
+          contents: [
+            ...(title ? [title] : []),
+            { type: "component", componentName: "SvgBlock", props: { svg: item.content } }
+          ]
+        };
+      }
+
+      if (item.kind === "code") {
+        return {
+          type: "flex",
+          flexBoxProperties: { className: "flex-col gap-3 p-4 rounded-xl border border-border bg-surface" },
+          contents: [
+            ...(title ? [title] : []),
+            { type: "component", componentName: "CodeBlock", props: { code: item.content, language: item.language } }
+          ]
+        };
+      }
+
+      return {
+        type: "flex",
+        flexBoxProperties: { className: "flex-col gap-3 p-4 rounded-xl border border-border bg-surface" },
+        contents: [
+          ...(title ? [title] : []),
+          { type: "component", componentName: "Text", props: { children: item.content, className: "text-sm text-fgMuted" } }
+        ]
+      };
+    });
 
     // Create artifacts section
     const artifacts = (state.recentSignals || [])
       .filter((s: any) => s.payload?.kind === "sense-output")
       .flatMap((s: any) => s.payload.output.artifacts || [])
-      .map((art: any) => ({
-        type: "component",
-        componentName: "Box",
-        props: { className: "p-4 bg-surface rounded-lg border border-border mb-4 card", children: art.description }
-      }));
+      .map((art: any) => {
+        if (art.kind === "experiment" && art.code) {
+          return {
+            type: "component",
+            componentName: "ExperimentViewer",
+            props: { code: art.code }
+          };
+        }
+        return {
+          type: "component",
+          componentName: "Box",
+          props: { className: "p-4 bg-surface rounded-lg border border-border mb-4 card", children: art.description }
+        };
+      });
 
     // Create interjections section
-    const interjections = (teachingContent?.interjections || []).map((ij: any, idx: number) => ({
+    const interjections = (teachingContent?.interjections || []).map((ij: any) => ({
       type: "flex",
       flexBoxProperties: { className: "p-6 bg-accent/5 rounded-xl border border-accent/20 my-6 flex-col gap-3" },
       contents: [
-        { type: "component", componentName: "Text", props: { children: `? ${ij.question}`, className: "font-bold text-accent italic" } },
+        { type: "component", componentName: "Text", props: { children: `Insight: ${ij.question}`, className: "font-bold text-accent" } },
         { type: "component", componentName: "Text", props: { children: ij.answer, className: "text-fg" } },
-        { type: "component", componentName: "Text", props: { children: `Motivation: ${ij.motivation}`, className: "text-xs text-fgSubtle" } }
+        { type: "component", componentName: "Text", props: { children: `Why it matters: ${ij.motivation}`, className: "text-xs text-fgSubtle" } }
       ]
     }));
 
@@ -238,6 +286,13 @@ Return ONLY valid JSON.
             { type: "component", componentName: "Heading", props: { children: title, className: "text-3xl font-bold text-fg tracking-tight" } },
             { type: "component", componentName: "Text", props: { children: explanation, className: "text-lg text-fgMuted leading-relaxed markdown-content" } },
             ...interjections,
+            ...(mediaBlocks.length ? [
+              {
+                type: "flex",
+                flexBoxProperties: { className: "flex-col gap-4 mt-4" },
+                contents: mediaBlocks
+              }
+            ] : []),
             {
               type: "flex",
               flexBoxProperties: { className: "flex-col gap-4 mt-6" },
@@ -249,8 +304,8 @@ Return ONLY valid JSON.
               type: "flex",
               flexBoxProperties: { className: "flex-row gap-4 mt-8" },
               contents: [
-                { type: "component", componentName: "Button", props: { children: "Next Concept", className: "btn btn-solid" }, onSubmit: "Advance to the next unit" },
-                { type: "component", componentName: "Button", props: { children: "Deep Dive", className: "btn btn-ghost" }, onSubmit: "Request specialized details" }
+                { type: "component", componentName: "Button", props: { children: "Next Concept", className: "btn btn-solid" }, onSubmit: "Advance to the next unit", sduiAction: "next-unit" },
+                { type: "component", componentName: "Button", props: { children: "Deep Dive", className: "btn btn-ghost" }, onSubmit: "Request specialized details", sduiAction: "deep-dive" }
               ]
             }
           ]

@@ -72,8 +72,24 @@ export class PlannerAgent implements Agent {
         };
       }
 
+      const amendSignal = state.recentSignals?.find(
+        (s: any) => s.payload?.kind === "amend-curriculum"
+      );
+      if (amendSignal && amendSignal.payload?.request) {
+        return {
+          statePatch,
+          intents: [
+            {
+              type: "amend-curriculum",
+              topic: state.goal.title,
+              request: String(amendSignal.payload.request),
+            },
+          ],
+        };
+      }
+
       // 2. CURRICULUM GUARD: If no curriculum and we have answers, draft it.
-      if (!state.curriculum && state.answers && Object.keys(state.answers).length > 0) {
+      if (!state.curriculum && !state.curriculumLocked && state.answers && Object.keys(state.answers).length > 0) {
         const intents: any[] = [];
         if (!state.pendingIntents.some(i => i.type === "draft-curriculum")) {
           intents.push({ type: "draft-curriculum", topic: state.goal.title, knowledgeLevel: state.knowledgeLevel });
@@ -101,9 +117,19 @@ export class PlannerAgent implements Agent {
       const parsed = JSON.parse(response);
 
       const intents: any[] = [];
+      const amendSignal = state.recentSignals?.find(
+        (s: any) => s.payload?.kind === "amend-curriculum"
+      );
+      if (amendSignal && amendSignal.payload?.request) {
+        intents.push({
+          type: "amend-curriculum",
+          topic: state.goal.title,
+          request: String(amendSignal.payload.request),
+        });
+      }
       if (parsed.decision === "ask-questions") {
         intents.push({ type: "ask-questions", topic: state.goal.title });
-      } else if (parsed.decision === "draft-curriculum" && !state.curriculum) {
+      } else if (parsed.decision === "draft-curriculum" && !state.curriculum && !state.curriculumLocked) {
         intents.push({
           type: "draft-curriculum",
           topic: state.goal.title,

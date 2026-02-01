@@ -30,6 +30,12 @@ export interface TeachingContent {
   title: string;
   explanation: string;
   firstPrinciples: string[];
+  media?: Array<{
+    kind: "svg" | "diagram" | "markdown" | "code";
+    title?: string;
+    content: string;
+    language?: string;
+  }>;
   senses: Array<{
     type: SenseType;
     prompt: string;
@@ -76,6 +82,7 @@ export interface SharedUnderstandingState {
   answers?: Record<ID, string>;
   curriculum?: CurriculumPlan;
   curriculumProgress?: Record<ID, "not_started" | "in_progress" | "done">;
+  curriculumLocked?: boolean;
   knowledgeRepository?: Record<ID, TeachingContent>; // Persisted explanations
   activeStep?: LearningStep;
   pendingUnitId?: ID | null;
@@ -122,14 +129,19 @@ export interface Agent {
 
 export type AgentIntent =
   | {
-    type: "draft-curriculum";
-    topic: string;
-    knowledgeLevel: KnowledgeLevel;
-  }
+      type: "draft-curriculum";
+      topic: string;
+      knowledgeLevel: KnowledgeLevel;
+    }
   | {
-    type: "ask-questions";
-    topic: string;
-  }
+      type: "amend-curriculum";
+      topic: string;
+      request: string;
+    }
+  | {
+      type: "ask-questions";
+      topic: string;
+    }
   | {
     type: "begin-teaching";
     moduleId?: ID;

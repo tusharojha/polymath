@@ -2,7 +2,7 @@ import type { Agent, AgentInput, AgentUpdate, TeachingContent } from "../types";
 import type { LLMClient } from "../llm/types";
 
 const TEACHING_PROMPT = `You are the Polymath Principal Teaching Agent. 
-Your goal is to provide a deep, professional, and world-class explanation of a concept using First-Principles.
+Your goal is to provide a deep, professional, and world-class explanation of a concept using First-Principles. You are teaching, not testing. Do not ask the user to explain anything.
 
 UNIT: {{unitTitle}}
 RATIONALE: {{unitRationale}}
@@ -11,19 +11,21 @@ INSTRUCTIONS:
 1. Long-form Exposition: Provide a comprehensive markdown explanation. Start from irreducible primitives and build up to complex interactions. Be professional, clear, and authoritative.
 2. Systemic Depth: Show exactly how this concept functions as a fundamental "brick" in the specialist's wall.
 3. Curiosity & Storytelling: Frame the knowledge in a way that makes the user want to know more. Use analogies that stick.
-4. Integrated "Senses": Suggest specific visuals, infographics, or research citations to ground the theory.
-5. Check-in Interjections: Provide 1-2 subtle questions with satisfying answers to help the user self-verify their mental model.
+4. Integrated "Senses": Suggest specific visuals, infographics, experiments, or research citations to ground the theory.
+5. Rich Media: Include 1-2 SVG or diagram blocks when helpful. These should be concise and readable. Prefer to include at least one SVG or diagram if possible.
+6. Interjections are handled by a separate sub-agent. Return an empty array for "interjections".
 
 Return STRICT JSON:
 {
   "explanation": "Deep markdown explanation starting with primitives",
   "firstPrinciples": ["primitive 1", "primitive 2"],
-  "senses": [
-    { "type": "visual" | "sound" | "infographic", "prompt": "precise description for the orchestrator", "reasoning": "educational value" }
+  "media": [
+    { "kind": "svg" | "diagram" | "markdown" | "code", "title": "Optional title", "content": "SVG or markdown or code", "language": "js|ts|python|none" }
   ],
-  "interjections": [
-    { "question": "self-verification question", "answer": "clear answer", "motivation": "why this concept is a superpower" }
-  ]
+  "senses": [
+    { "type": "visual" | "sound" | "infographic" | "experiment", "prompt": "precise description for the orchestrator", "reasoning": "educational value" }
+  ],
+  "interjections": []
 }
 `;
 
@@ -44,8 +46,11 @@ export class TeachingAgent implements Agent {
 
     const beginIntent = state.pendingIntents.find(i => i.type === "begin-teaching") as any;
 
-    const unitId = (openSignal?.payload?.data as any)?.unitId || beginIntent?.unitId || state.pendingUnitId;
-    if (!unitId) return null;
+    const openData = (openSignal?.payload?.data as any) || {};
+    const unitIdFromSignal = openData.unitId as string | undefined;
+    const unitTitleFromSignal = openData.unitTitle as string | undefined;
+    let unitId = unitIdFromSignal || beginIntent?.unitId || state.pendingUnitId || null;
+    if (!unitId && !unitTitleFromSignal) return null;
 
     // Check if we already have this in the repository
     if (state.knowledgeRepository?.[unitId]) {
@@ -71,8 +76,9 @@ export class TeachingAgent implements Agent {
     }
 
     // Find the unit in the curriculum
-    const unit = this.findUnit(state.curriculum, unitId);
+    const unit = this.findUnit(state.curriculum, unitId, unitTitleFromSignal);
     if (!unit) return null;
+    unitId = unit.id;
 
     const prompt = TEACHING_PROMPT
       .replace("{{unitTitle}}", unit.title)
@@ -89,6 +95,7 @@ export class TeachingAgent implements Agent {
         title: unit.title,
         explanation: parsed.explanation,
         firstPrinciples: parsed.firstPrinciples ?? [],
+        media: Array.isArray(parsed.media) ? parsed.media : [],
         senses: parsed.senses ?? [],
         interjections: parsed.interjections ?? []
       };
@@ -118,11 +125,20 @@ export class TeachingAgent implements Agent {
     }
   }
 
-  private findUnit(curriculum: any, unitId: string): any {
+  private findUnit(curriculum: any, unitId?: string | null, unitTitle?: string): any {
     if (!curriculum?.modules) return null;
-    for (const mod of curriculum.modules) {
-      const unit = mod.units?.find((u: any) => u.id === unitId);
-      if (unit) return unit;
+    if (unitId) {
+      for (const mod of curriculum.modules) {
+        const unit = mod.units?.find((u: any) => u.id === unitId);
+        if (unit) return unit;
+      }
+    }
+    if (unitTitle) {
+      const normalized = unitTitle.toLowerCase();
+      for (const mod of curriculum.modules) {
+        const unit = mod.units?.find((u: any) => (u.title || "").toLowerCase() === normalized);
+        if (unit) return unit;
+      }
     }
     return null;
   }

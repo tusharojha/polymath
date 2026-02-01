@@ -209,11 +209,16 @@ export class CurriculumAgent implements Agent {
 
   async observe(input: AgentInput): Promise<AgentUpdate | null> {
     const requested = input.state.pendingIntents.find(
-      (intent) => intent.type === "draft-curriculum"
+      (intent) => intent.type === "draft-curriculum" || intent.type === "amend-curriculum"
     );
-    if (!requested || requested.type !== "draft-curriculum") {
+    if (!requested) {
       return null;
     }
+    if (input.state.curriculumLocked && requested.type !== "amend-curriculum") {
+      return null;
+    }
+    const amendmentRequest =
+      requested.type === "amend-curriculum" ? requested.request : null;
 
     // If we have questions to ask, we WAIT for answers unless they are already there
     if (input.state.questions && input.state.questions.length > 0 && !input.state.answers) {
@@ -244,14 +249,18 @@ export class CurriculumAgent implements Agent {
     const prompt = `${CURRICULUM_SYSTEM_PROMPT}
 
 TOPIC: ${input.state.goal.title}${userPurpose}${answersBlock}${researchBlock}
+AMENDMENT REQUEST: ${amendmentRequest ?? "none"}
 
 Draft a 10-15 module specialist-level curriculum. Ground it in the research provided.`;
 
     const text = await this.llm.generate(prompt);
     if (!text) {
+      const curriculum = buildFallbackCurriculum(input.state.goal.title, input.state.goal.id);
       return {
         statePatch: {
-          curriculum: buildFallbackCurriculum(input.state.goal.title, input.state.goal.id),
+          curriculum,
+          curriculumProgress: curriculum.tree ? collectTreeIds(curriculum.tree, {}) : {},
+          curriculumLocked: true,
         },
       };
     }
@@ -307,6 +316,7 @@ Draft a 10-15 module specialist-level curriculum. Ground it in the research prov
             },
             phase: "learning",
             curriculumProgress: progress,
+            curriculumLocked: true,
           },
           notes: ["LLM curriculum parsed from JSON."],
         };
@@ -317,6 +327,7 @@ Draft a 10-15 module specialist-level curriculum. Ground it in the research prov
         statePatch: {
           curriculum,
           curriculumProgress: curriculum.tree ? collectTreeIds(curriculum.tree, {}) : {},
+          curriculumLocked: true,
         },
         notes: [`Failed to parse curriculum JSON: ${(error as Error).message}`],
       };
@@ -328,6 +339,7 @@ Draft a 10-15 module specialist-level curriculum. Ground it in the research prov
         curriculum,
         curriculumProgress: curriculum.tree ? collectTreeIds(curriculum.tree, {}) : {},
         phase: "learning",
+        curriculumLocked: true,
       },
       notes: ["LLM output received; using fallback parser for v1."],
     };

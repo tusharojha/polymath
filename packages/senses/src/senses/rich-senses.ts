@@ -1,9 +1,32 @@
-export async function runSenses(intents: any[], context: any): Promise<any[]> {
+import { runExperimentSense } from "./experiment-sense";
+
+export async function runSenses(
+  intents: any[],
+  context: any,
+  llm?: { generate: (p: string) => Promise<string> }
+): Promise<any[]> {
   const results = [];
   for (const intent of intents) {
     if (intent.type === "present-sense") {
       // Mocking rich data for now, but this could call external APIs or LLMs
       const artifacts = [];
+
+      if (intent.sense === "experiment" && llm) {
+        const output = await runExperimentSense(
+          {
+            context: { goal: context.goal, userId: context.userId },
+            prompt: intent.prompt,
+            params: intent.params,
+          },
+          llm
+        );
+        results.push({
+          id: intent.id || `sense-out-${Date.now()}`,
+          sense: intent.sense,
+          artifacts: output.artifacts ?? [],
+        });
+        continue;
+      }
 
       if (intent.sense === "visual") {
         artifacts.push({

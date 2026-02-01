@@ -8,6 +8,8 @@ import {
   type SenseOutput,
 } from "@polymath/senses";
 import { Sparkles, Brain, LayoutDashboard, Send, ChevronLeft, ChevronRight, Volume2, Mic, Music, Star, Award } from "lucide-react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 type BrainResponse = {
   ok: boolean;
@@ -19,6 +21,40 @@ const registry = createDefaultSenseRegistry(defaultSensePlugins);
 
 const MotionBox = motion.div;
 
+const MarkdownBlock = ({ content }: { content: string }) => (
+  <div className="prose prose-sm max-w-none text-fg">
+    <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
+  </div>
+);
+
+function ExperimentViewer({ code }: { code: string }) {
+  const srcDoc = `<!doctype html><html><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /></head><body style="margin:0;background:#0b0f16;color:#e5e7eb;">${code}</body></html>`;
+  return (
+    <iframe
+      sandbox="allow-scripts"
+      srcDoc={srcDoc}
+      className="w-full h-[420px] rounded-xl border border-border bg-black"
+      title="Experiment"
+    />
+  );
+}
+
+function SvgBlock({ svg }: { svg: string }) {
+  return (
+    <div
+      className="w-full overflow-auto rounded-lg bg-white p-3 border border-border"
+      dangerouslySetInnerHTML={{ __html: svg }}
+    />
+  );
+}
+
+function CodeBlock({ code, language }: { code: string; language?: string }) {
+  return (
+    <pre className="w-full overflow-auto rounded-lg bg-[#0b0f16] text-[#e5e7eb] p-4 text-xs">
+      <code className={`language-${language || "text"}`}>{code}</code>
+    </pre>
+  );
+}
 // --- JSON-First Renderer (SDUI) ---
 
 const TailwindComponents: Record<string, any> = {
@@ -79,10 +115,13 @@ const TailwindComponents: Record<string, any> = {
     );
   },
   Divider: (props: any) => <div className="h-px bg-border my-4" {...props} />,
-  Card: (props: any) => <div className={`card ${props.className || ""}`} {...props} />
+  Card: (props: any) => <div className={`card ${props.className || ""}`} {...props} />,
+  ExperimentViewer: (props: any) => <ExperimentViewer code={props.code} />,
+  SvgBlock: (props: any) => <SvgBlock svg={props.svg} />,
+  CodeBlock: (props: any) => <CodeBlock code={props.code} language={props.language} />
 };
 
-function JSONRenderer({ node, state, setState, onIntent }: any) {
+function JSONRenderer({ node, state, setState, onIntent, path, isThinking, disabledButtons }: any) {
   if (!node) return null;
 
   if (node.type === "flex") {
@@ -90,7 +129,16 @@ function JSONRenderer({ node, state, setState, onIntent }: any) {
     return (
       <div className={`flex ${className || ""}`} {...restFlex}>
         {node.contents?.map((child: any, idx: number) => (
-          <JSONRenderer key={idx} node={child} state={state} setState={setState} onIntent={onIntent} />
+          <JSONRenderer
+            key={idx}
+            node={child}
+            state={state}
+            setState={setState}
+            onIntent={onIntent}
+            path={`${path}.contents.${idx}`}
+            isThinking={isThinking}
+            disabledButtons={disabledButtons}
+          />
         ))}
       </div>
     );
@@ -117,7 +165,14 @@ function JSONRenderer({ node, state, setState, onIntent }: any) {
 
     // 2. Button Submission
     if (node.componentName === "Button" && node.onSubmit) {
-      interactionProps.onClick = () => onIntent(node.onSubmit, state, node.sduiAction);
+      const isDisabled = isThinking || disabledButtons?.[path];
+      interactionProps.disabled = isDisabled;
+      interactionProps.onClick = () => {
+        if (!isDisabled) {
+          onIntent(node.onSubmit, state, node.sduiAction, path);
+        }
+      };
+      interactionProps.className = `${restProps.className || ""} ${isDisabled ? "opacity-50 cursor-not-allowed" : ""}`;
     }
 
     // Void elements or components that handle their own children specifically
@@ -129,9 +184,18 @@ function JSONRenderer({ node, state, setState, onIntent }: any) {
 
     return (
       <Component {...restProps} {...interactionProps}>
-        {typeof children === "object" ? JSON.stringify(children) : children}
+        {typeof children === "string" ? <MarkdownBlock content={children} /> : children}
         {node.contents?.map((child: any, idx: number) => (
-          <JSONRenderer key={idx} node={child} state={state} setState={setState} onIntent={onIntent} />
+          <JSONRenderer
+            key={idx}
+            node={child}
+            state={state}
+            setState={setState}
+            onIntent={onIntent}
+            path={`${path}.contents.${idx}`}
+            isThinking={isThinking}
+            disabledButtons={disabledButtons}
+          />
         ))}
       </Component>
     );
@@ -349,6 +413,7 @@ function IntelligencePanel({
 function Workspace({ state, bridge, setAnswers, answers, senseArtifacts, isThinking, notes }: any) {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [expandedNodes, setExpandedNodes] = useState<Record<string, boolean>>({});
+  const [disabledButtons, setDisabledButtons] = useState<Record<string, boolean>>({});
 
   // SDUI State
   const surface = state?.shared?.learningSurface;
@@ -364,9 +429,14 @@ function Workspace({ state, bridge, setAnswers, answers, senseArtifacts, isThink
 
   const curriculum = state?.shared?.curriculum;
   const progress = state?.shared?.curriculumProgress ?? {};
+  const activeUnitId = state?.shared?.activeStep?.unitId;
+  const activeUnitTitle = state?.shared?.activeStep?.title;
 
-  const handleIntent = async (reasoning: string, currentState: any, action: string = "sdui-interaction", extraData: any = {}) => {
+  const handleIntent = async (reasoning: string, currentState: any, action: string = "sdui-interaction", buttonKey?: string, extraData: any = {}) => {
     if (!bridge) return;
+    if (buttonKey) {
+      setDisabledButtons((prev) => ({ ...prev, [buttonKey]: true }));
+    }
 
     await bridge.signal({
       id: `intent-${Date.now()}`,
@@ -387,6 +457,12 @@ function Workspace({ state, bridge, setAnswers, answers, senseArtifacts, isThink
     });
   };
 
+  useEffect(() => {
+    if (!isThinking) {
+      setDisabledButtons({});
+    }
+  }, [isThinking]);
+
   const toggleNode = (id: string) => {
     setExpandedNodes((prev) => ({ ...prev, [id]: !prev[id] }));
   };
@@ -396,23 +472,34 @@ function Workspace({ state, bridge, setAnswers, answers, senseArtifacts, isThink
     const isExpanded = expandedNodes[node.id] ?? depth < 1;
     const hasChildren = (node.children ?? []).length > 0;
     const status = progress[node.id];
+    const isActive = (activeUnitId && node.id === activeUnitId) ||
+      (activeUnitTitle && (node.title || "").toLowerCase() === activeUnitTitle.toLowerCase());
     return (
       <div key={node.id} style={{ marginLeft: depth * 12 }}>
         <div
-          className={`flex flex-row gap-2 items-center p-2 rounded-md ${hasChildren ? "cursor-pointer hover:bg-surfaceElevated" : "cursor-default"}`}
-          onClick={() => hasChildren && toggleNode(node.id)}
+          className={`flex flex-row gap-2 items-center p-2 rounded-md ${isActive ? "bg-accent/10 text-accent" : ""} ${hasChildren ? "hover:bg-surfaceElevated" : "cursor-pointer hover:bg-accent/5"}`}
         >
           {hasChildren ? (
             <motion.div
               animate={{ rotate: isExpanded ? 90 : 0 }}
               transition={{ duration: 0.2 }}
+              onClick={() => toggleNode(node.id)}
             >
               <ChevronRight size={14} className="text-fgSubtle" />
             </motion.div>
           ) : (
             <div className="w-3" />
           )}
-          <p className="text-sm font-semibold text-fg">
+          <p
+            className={`text-sm font-semibold ${isActive ? "text-accent" : "text-fg"}`}
+            onClick={() => {
+              if (!hasChildren) {
+                handleIntent(`Open unit: ${node.title}`, state?.shared, "open-unit", undefined, { unitId: node.id, unitTitle: node.title });
+              } else {
+                toggleNode(node.id);
+              }
+            }}
+          >
             {node.title}
           </p>
           {status && (
@@ -564,6 +651,9 @@ function Workspace({ state, bridge, setAnswers, answers, senseArtifacts, isThink
               state={localState}
               setState={setLocalState}
               onIntent={handleIntent}
+              path={`root.${idx}`}
+              isThinking={isThinking}
+              disabledButtons={disabledButtons}
             />
           ))}
         </div>
