@@ -27,4 +27,20 @@ export class OpenAIResponsesClient implements LLMClient {
       throw error;
     }
   }
+
+  async generateImage(prompt: string): Promise<string> {
+    try {
+      const response = await this.openai.images.generate({
+        model: "dall-e-3",
+        prompt: prompt,
+        n: 1,
+        size: "1024x1024",
+      });
+
+      return response.data?.[0]?.url ?? "";
+    } catch (error) {
+      console.error("OpenAI image generation error:", error);
+      throw error;
+    }
+  }
 }

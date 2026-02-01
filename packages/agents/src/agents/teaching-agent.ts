@@ -11,7 +11,7 @@ INSTRUCTIONS:
 1. Long-form Exposition: Provide a comprehensive markdown explanation. Start from irreducible primitives and build up to complex interactions. Be professional, clear, and authoritative.
 2. Systemic Depth: Show exactly how this concept functions as a fundamental "brick" in the specialist's wall.
 3. Curiosity & Storytelling: Frame the knowledge in a way that makes the user want to know more. Use analogies that stick.
-4. Integrated "Senses": Suggest specific visuals, infographics, experiments, or research citations to ground the theory.
+4. Integrated "Senses": Suggest specific visuals, infographics, experiments, or research citations to ground the theory. Use "infographic" specifically for complex systemic mappings or visual summaries that need high-fidelity AI generation.
 5. Rich Media: Include 1-2 SVG or diagram blocks when helpful. These should be concise and readable. Prefer to include at least one SVG or diagram if possible.
 6. Interjections are handled by a separate sub-agent. Return an empty array for "interjections".
 

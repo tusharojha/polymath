@@ -254,6 +254,20 @@ Return ONLY valid JSON.
             props: { code: art.code }
           };
         }
+        if (art.kind === "infographic" && art.url) {
+          return {
+            type: "flex",
+            flexBoxProperties: { className: "flex-col gap-3 p-4 rounded-xl border border-border bg-surface my-4" },
+            contents: [
+              { type: "component", componentName: "Text", props: { children: art.title || "Infographic", className: "text-xs uppercase tracking-widest text-fgSubtle" } },
+              {
+                type: "component", componentName: "Box", props: { className: "aspect-square w-full rounded-lg overflow-hidden border border-border bg-black" }, contents: [
+                  { type: "component", componentName: "Image", props: { src: art.url, alt: art.description, className: "w-full h-full object-cover" } }
+                ]
+              }
+            ]
+          };
+        }
         return {
           type: "component",
           componentName: "Box",

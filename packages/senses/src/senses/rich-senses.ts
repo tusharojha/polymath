@@ -1,4 +1,5 @@
 import { runExperimentSense } from "./experiment-sense";
+import { runInfographicSense } from "./infographic-sense";
 
 export async function runSenses(
   intents: any[],
@@ -19,6 +20,23 @@ export async function runSenses(
             params: intent.params,
           },
           llm
+        );
+        results.push({
+          id: intent.id || `sense-out-${Date.now()}`,
+          sense: intent.sense,
+          artifacts: output.artifacts ?? [],
+        });
+        continue;
+      }
+
+      if (intent.sense === "infographic" && llm && (llm as any).generateImage) {
+        const output = await runInfographicSense(
+          {
+            context: { goal: context.goal, userId: context.userId },
+            prompt: intent.prompt,
+            params: intent.params,
+          },
+          llm as any
         );
         results.push({
           id: intent.id || `sense-out-${Date.now()}`,

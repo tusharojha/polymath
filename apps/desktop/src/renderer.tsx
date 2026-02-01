@@ -118,7 +118,8 @@ const TailwindComponents: Record<string, any> = {
   Card: (props: any) => <div className={`card ${props.className || ""}`} {...props} />,
   ExperimentViewer: (props: any) => <ExperimentViewer code={props.code} />,
   SvgBlock: (props: any) => <SvgBlock svg={props.svg} />,
-  CodeBlock: (props: any) => <CodeBlock code={props.code} language={props.language} />
+  CodeBlock: (props: any) => <CodeBlock code={props.code} language={props.language} />,
+  Image: (props: any) => <img {...props} />
 };
 
 function JSONRenderer({ node, state, setState, onIntent, path, isThinking, disabledButtons }: any) {
