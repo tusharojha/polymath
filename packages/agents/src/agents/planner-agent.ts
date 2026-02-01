@@ -40,10 +40,51 @@ export class PlannerAgent implements Agent {
 
   constructor(private readonly llm?: LLMClient) { }
 
+  private ruleBasedDecision(input: AgentInput): AgentUpdate | null {
+    const { state, newSignals } = input;
+
+    // RULE: If clicking open-unit, stay in learning and ensure we are teaching
+    const openSignal = newSignals.find(s => s.payload?.kind === "ui-intent" && (s.payload?.action === "open-unit" || s.payload?.action === "none"));
+    if (openSignal) {
+      const unitId = (openSignal.payload?.data as any)?.unitId || state.activeStep?.unitId;
+      if (unitId) {
+        return {
+          statePatch: { phase: "learning" },
+          intents: [{ type: "begin-teaching", unitId }]
+        };
+      }
+    }
+
+    // RULE: If advancing to next unit
+    const nextSignal = newSignals.find(s => s.payload?.kind === "ui-intent" && s.payload?.action === "next-unit");
+    if (nextSignal && state.curriculum) {
+      const currentUnitId = state.activeStep?.unitId;
+      const allUnits = state.curriculum.modules.flatMap(m => m.units);
+      const currentIndex = allUnits.findIndex(u => u.id === currentUnitId);
+      const nextUnit = allUnits[currentIndex + 1];
+      if (nextUnit) {
+        return {
+          statePatch: { phase: "learning" },
+          intents: [{ type: "begin-teaching", unitId: nextUnit.id }]
+        };
+      }
+    }
+
+    // RULE: Intake submission
+    const submitSignal = newSignals.find(s => s.payload?.kind === "ui-intent" && s.payload?.action === "submit-answers");
+    if (submitSignal && state.phase === "intake") {
+      return {
+        intents: [{ type: "draft-curriculum", topic: state.goal.title, knowledgeLevel: state.knowledgeLevel }]
+      };
+    }
+
+    return null;
+  }
+
   async observe(input: AgentInput): Promise<AgentUpdate | null> {
     const { state, now, newSignals } = input;
 
-    // Selective Bypass: If the signal is purely navigational, skip planning
+    // 1. Selective Bypass: If the signal is purely navigational, skip planning
     const isNavigational = newSignals.some(s =>
       s.payload?.kind === "ui-intent" && (s.payload?.action === "open-unit" || s.payload?.action === "none")
     );
@@ -51,7 +92,11 @@ export class PlannerAgent implements Agent {
       return null;
     }
 
-    // 1. Ensure thesis graph exists
+    // 2. Rule-based fast track (Zero LLM cost)
+    const fastDecision = this.ruleBasedDecision(input);
+    if (fastDecision) return fastDecision;
+
+    // 3. Ensure thesis graph exists
     const statePatch: any = {};
     if (!state.thesisGraph) {
       statePatch.thesisGraph = {
@@ -71,53 +116,21 @@ export class PlannerAgent implements Agent {
     }
 
     if (!this.llm) {
-      // Fallback to legacy logic if no LLM
-      // 1. PHASE GUARD: If we have questions but no answers, we MUST stay in questionnaire.
       if (state.questions?.length && (!state.answers || Object.keys(state.answers).length === 0)) {
         return {
           statePatch: { phase: "questionnaire" },
           intents: [{ type: "ask-questions", topic: state.goal.title }]
         };
       }
-
-      const amendSignal = state.recentSignals?.find(
-        (s: any) => s.payload?.kind === "amend-curriculum"
-      );
-      if (amendSignal && amendSignal.payload?.request) {
-        return {
-          statePatch,
-          intents: [
-            {
-              type: "amend-curriculum",
-              topic: state.goal.title,
-              request: String(amendSignal.payload.request),
-            },
-          ],
-        };
-      }
-
-      // 2. CURRICULUM GUARD: If no curriculum and we have answers, draft it.
-      if (!state.curriculum && !state.curriculumLocked && state.answers && Object.keys(state.answers).length > 0) {
-        const intents: any[] = [];
-        if (!state.pendingIntents.some(i => i.type === "draft-curriculum")) {
-          intents.push({ type: "draft-curriculum", topic: state.goal.title, knowledgeLevel: state.knowledgeLevel });
-        }
-        return { statePatch, intents };
-      }
-
       return { statePatch, intents: [] };
     }
 
     try {
-      console.log('full planner state', state)
       const context = JSON.stringify({
         topic: state.goal.title,
-        thesisConfidence: state.thesis?.confidence,
         hasQuestions: !!state.questions,
         hasAnswers: !!state.answers,
         hasCurriculum: !!state.curriculum,
-        recentAnswers: state.answers,
-        valueVector: state.valueVector, // Curiosity, Depth, Practice, Revision, Collaboration
         phase: state.phase
       });
 
@@ -125,44 +138,17 @@ export class PlannerAgent implements Agent {
       const parsed = JSON.parse(response);
 
       const intents: any[] = [];
-      const amendSignal = state.recentSignals?.find(
-        (s: any) => s.payload?.kind === "amend-curriculum"
-      );
-      if (amendSignal && amendSignal.payload?.request) {
-        intents.push({
-          type: "amend-curriculum",
-          topic: state.goal.title,
-          request: String(amendSignal.payload.request),
-        });
-      }
       if (parsed.decision === "ask-questions") {
         intents.push({ type: "ask-questions", topic: state.goal.title });
-      } else if (parsed.decision === "draft-curriculum" && !state.curriculum && !state.curriculumLocked) {
-        intents.push({
-          type: "draft-curriculum",
-          topic: state.goal.title,
-          knowledgeLevel: state.knowledgeLevel,
-        });
+      } else if (parsed.decision === "draft-curriculum" && !state.curriculum) {
+        intents.push({ type: "draft-curriculum", topic: state.goal.title, knowledgeLevel: state.knowledgeLevel });
       } else if (parsed.decision === "begin-teaching") {
-        intents.push({
-          type: "begin-teaching",
-          unitId: state.curriculum?.modules?.[0]?.units?.[0]?.id
-        });
-      } else if (parsed.decision === "orchestrate-sense" && parsed.sense) {
-        intents.push({
-          type: "present-sense",
-          sense: parsed.sense,
-          prompt: parsed.reasoning
-        });
+        intents.push({ type: "begin-teaching", unitId: state.curriculum?.modules?.[0]?.units?.[0]?.id });
       }
 
-      return {
-        statePatch,
-        intents,
-        notes: [parsed.reasoning],
-      };
+      return { statePatch, intents, notes: [parsed.reasoning] };
     } catch (err) {
-      return { statePatch, notes: ["Planner failed to decide: " + (err as Error).message] };
+      return { statePatch, notes: ["Planner failed: " + (err as Error).message] };
     }
   }
 }

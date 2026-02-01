@@ -20,6 +20,7 @@ import {
 import { BrainMemory } from "./memory";
 import { runResearch } from "./research";
 import { runSenses } from "@polymath/senses";
+import { runExperimentSense } from "@polymath/senses";
 
 export interface BrainSessionResult {
   shared: ReturnType<InMemoryUnderstandingState["get"]>;
@@ -85,11 +86,9 @@ export class BrainRuntime {
         new QuestionAgent(llm),
         new CurriculumAgent(llm, runResearch),
         new SenseOrchestratorAgent(),
-        new LearningStepBuilderAgent(llm),
         new RevisionDepthAgent(),
         new SynthesisAgent(),
         new TeachingAgent(llm),
-        new LabsAgent(llm),
         new InterjectionAgent(llm),
         new UIBuilderAgent(llm),
       ],
@@ -108,6 +107,7 @@ export class BrainRuntime {
     this.onStatusChange?.("thinking");
 
     try {
+      const loadExperimentRequests: Array<{ prompt?: string; params?: Record<string, unknown> }> = [];
       const mappedSignals = signals.map((signal: any) => {
         if (signal.payload?.kind === "ui-intent") {
           const { action, data } = signal.payload as any;
@@ -123,15 +123,60 @@ export class BrainRuntime {
               payload: { kind: "amend-curriculum", request: data?.request ?? "" },
             };
           }
+          if (action === "load-experiment") {
+            loadExperimentRequests.push({ prompt: data?.prompt, params: data?.params });
+          }
         }
         return signal;
       });
-      let result = await this.runtime.ingest(mappedSignals);
+
+      if (loadExperimentRequests.length > 0 && this.llm) {
+        const outputs = [];
+        for (const req of loadExperimentRequests) {
+          const output = await runExperimentSense(
+            {
+              context: { goal: { id: this.goalId }, userId: this.userId },
+              prompt: req.prompt,
+              params: req.params,
+            } as any,
+            this.llm as any
+          );
+          outputs.push(output);
+        }
+        const senseSignals = outputs.map((out: any) => ({
+          id: `signal-${out.id || Date.now()}`,
+          userId: this.userId,
+          goalId: this.goalId,
+          observedAt: Date.now(),
+          type: "direct" as const,
+          payload: { kind: "sense-output", output: out },
+        }));
+        const combinedSignals = [...mappedSignals, ...senseSignals];
+
+        let lastResult: any = null;
+        for await (const partial of this.runtime.streamIngest(combinedSignals)) {
+          lastResult = partial;
+          this.onUpdateListener?.(partial.shared);
+        }
+
+        await this.memory.saveState(this.userId, this.goalId, lastResult.shared);
+        return {
+          shared: lastResult.shared,
+          intents: lastResult.intents,
+          notes: lastResult.notes,
+        };
+      }
+
+      let lastResult: any = null;
+      for await (const partial of this.runtime.streamIngest(mappedSignals)) {
+        lastResult = partial;
+        this.onUpdateListener?.(partial.shared);
+      }
 
       // Pass 2: If we have sense intents, run them
-      const senseIntents = result.intents.filter((i: any) => i.type === "present-sense");
+      const senseIntents = lastResult.intents.filter((i: any) => i.type === "present-sense");
       if (senseIntents.length > 0) {
-        const senseOutputs = await runSenses(senseIntents, result.shared, this.llm);
+        const senseOutputs = await runSenses(senseIntents, lastResult.shared, this.llm);
 
         const newSignals = senseOutputs.map((out: any) => ({
           id: `signal-${out.id}`,
@@ -142,14 +187,17 @@ export class BrainRuntime {
           payload: { kind: "sense-output", output: out },
         }));
 
-        result = await this.runtime.ingest(newSignals);
+        for await (const partial of this.runtime.streamIngest(newSignals)) {
+          lastResult = partial;
+          this.onUpdateListener?.(partial.shared);
+        }
       }
 
-      await this.memory.saveState(this.userId, this.goalId, result.shared);
+      await this.memory.saveState(this.userId, this.goalId, lastResult.shared);
       return {
-        shared: result.shared,
-        intents: result.intents,
-        notes: result.notes,
+        shared: lastResult.shared,
+        intents: lastResult.intents,
+        notes: lastResult.notes,
       };
     } finally {
       this.onStatusChange?.("idle");

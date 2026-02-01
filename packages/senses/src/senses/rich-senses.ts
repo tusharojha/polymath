@@ -12,19 +12,18 @@ export async function runSenses(
       // Mocking rich data for now, but this could call external APIs or LLMs
       const artifacts = [];
 
-      if (intent.sense === "experiment" && llm) {
-        const output = await runExperimentSense(
-          {
-            context: { goal: context.goal, userId: context.userId },
-            prompt: intent.prompt,
-            params: intent.params,
-          },
-          llm
-        );
+      if (intent.sense === "experiment") {
         results.push({
           id: intent.id || `sense-out-${Date.now()}`,
           sense: intent.sense,
-          artifacts: output.artifacts ?? [],
+          artifacts: [
+            {
+              kind: "experiment_stub",
+              title: "Interactive Lab",
+              description: "Load a hands-on experiment for this concept.",
+              prompt: intent.prompt,
+            },
+          ],
         });
         continue;
       }

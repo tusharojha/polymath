@@ -74,3 +74,4 @@ export function createDefaultSenseRegistry(plugins: SensePlugin[]) {
   return registry;
 }
 export * from "./senses/rich-senses";
+export * from "./senses/experiment-sense";

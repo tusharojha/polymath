@@ -7,6 +7,7 @@ type AgentGraphState = {
   newSignals: EvidenceSignal[];
   intents: AgentIntent[];
   notes: string[];
+  activeAgent?: string;
 };
 
 const AgentState = Annotation.Root({
@@ -76,16 +77,21 @@ function applyUpdate(
 
 function makeAgentNode(agent: Agent) {
   return async (state: AgentGraphState): Promise<Partial<AgentGraphState>> => {
+    // Update the active agent in the shared state for streaming visibility
+    const sharedWithActive = { ...state.shared, activeAgent: agent.id };
+
     const update = await agent.observe({
       now: Date.now(),
       newSignals: state.newSignals,
-      state: state.shared,
+      state: sharedWithActive,
     });
+
     if (!update) {
-      return {};
+      // Even if no update, we should clear the active agent if needed or keep it
+      return { shared: sharedWithActive };
     }
 
-    const nextShared = applyUpdate(state.shared, update, Date.now());
+    const nextShared = applyUpdate(sharedWithActive, update, Date.now());
     return {
       shared: nextShared,
       intents: update.intents ?? [],

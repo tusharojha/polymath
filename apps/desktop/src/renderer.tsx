@@ -170,7 +170,7 @@ function JSONRenderer({ node, state, setState, onIntent, path, isThinking, disab
       interactionProps.disabled = isDisabled;
       interactionProps.onClick = () => {
         if (!isDisabled) {
-          onIntent(node.onSubmit, state, node.sduiAction, path);
+          onIntent(node.onSubmit, state, node.sduiAction, path, node.sduiData);
         }
       };
       interactionProps.className = `${restProps.className || ""} ${isDisabled ? "opacity-50 cursor-not-allowed" : ""}`;
@@ -230,10 +230,23 @@ function IntelligencePanel({
 
   // Get current agent activity
   const getAgentActivity = () => {
-    if (isThinking) return { text: "Thinking & Refining", icon: Brain, color: "accent" };
-    if (state?.phase === "intake") return { text: "Gathering Context", icon: Sparkles, color: "blue.500" };
-    if (state?.phase === "curriculum") return { text: "Building Curriculum", icon: LayoutDashboard, color: "purple.500" };
-    return { text: "Ready", icon: Sparkles, color: "green.500" };
+    if (!isThinking) return { text: "Ready", icon: Sparkles, color: "green-500" };
+
+    const activeAgent = state?.activeAgent;
+    if (activeAgent) {
+      if (activeAgent === "understanding-agent") return { text: "Interpreting Signal", icon: Brain, color: "blue-400" };
+      if (activeAgent === "planner-agent") return { text: "Strategic Planning", icon: LayoutDashboard, color: "purple-400" };
+      if (activeAgent === "question-agent") return { text: "Designing Assessment", icon: Sparkles, color: "yellow-400" };
+      if (activeAgent === "curriculum-agent") return { text: "Mapping Knowledge", icon: LayoutDashboard, color: "orange-400" };
+      if (activeAgent === "teaching-agent") return { text: "Synthesizing Lesson", icon: Award, color: "accent" };
+      if (activeAgent === "ui-builder-agent") return { text: "Composing Surface", icon: LayoutDashboard, color: "pink-400" };
+      if (activeAgent === "sense-orchestrator-agent") return { text: "Orchestrating Senses", icon: Volume2, color: "cyan-400" };
+    }
+
+    if (state?.phase === "intake") return { text: "Gathering Context", icon: Sparkles, color: "blue-500" };
+    if (state?.phase === "curriculum") return { text: "Building Curriculum", icon: LayoutDashboard, color: "purple-500" };
+
+    return { text: "Thinking & Refining", icon: Brain, color: "accent" };
   };
 
   const activity = getAgentActivity();
@@ -281,12 +294,20 @@ function IntelligencePanel({
             </motion.div>
           </div>
           <div className="flex flex-col gap-2">
+            {isThinking && state?.activeAgent && (
+              <div className="p-2 bg-accent/10 rounded border border-accent/20 flex flex-row items-center gap-2">
+                <motion.div animate={{ opacity: [0.4, 1, 0.4] }} transition={{ repeat: Infinity, duration: 1.5 }}>
+                  <div className="w-2 h-2 rounded-full bg-accent" />
+                </motion.div>
+                <p className="text-xs font-bold text-accent">Active: {state.activeAgent.replace("-agent", "").toUpperCase()}</p>
+              </div>
+            )}
             {(notes ?? []).slice(-4).map((note, idx) => (
               <div key={`note-${idx}`} className="p-2 bg-surface rounded border border-border">
                 <p className="text-xs text-fgMuted">{note}</p>
               </div>
             ))}
-            {(!notes || notes.length === 0) && (
+            {(!notes || notes.length === 0) && !state?.activeAgent && (
               <p className="text-xs text-fgSubtle">Waiting for updates...</p>
             )}
           </div>
@@ -535,47 +556,7 @@ function Workspace({ state, bridge, setAnswers, answers, senseArtifacts, isThink
     );
   };
 
-  if (!components) {
-    return (
-      <div className={`grid h-screen bg-bg gap-0 ${isSidebarCollapsed ? "grid-cols-[0px_1fr_340px]" : "grid-cols-[280px_1fr_340px]"} lg:grid-cols-[280px_1fr_340px]`}>
-        {/* Left sidebar skeleton */}
-        <div className={`border-r border-border p-10 bg-bgSurface ${isSidebarCollapsed ? "hidden" : "block"}`}>
-          <div className="flex flex-col gap-8 h-full">
-            <div className="h-6 w-2/5 bg-surfaceElevated animate-pulse rounded-md" />
-            <div className="flex flex-col gap-4">
-              <div className="h-10 bg-surfaceElevated animate-pulse rounded-lg" />
-              <div className="h-10 bg-surfaceElevated animate-pulse rounded-lg" />
-              <div className="h-10 bg-surfaceElevated animate-pulse rounded-lg" />
-            </div>
-          </div>
-        </div>
-
-        {/* Main content skeleton */}
-        <div className="p-12">
-          <div className="flex flex-col gap-10">
-            <div className="h-12 w-3/5 bg-surfaceElevated animate-pulse rounded-lg" />
-            <div className="h-40 bg-surfaceElevated animate-pulse rounded-2xl" />
-            <div className="flex flex-col gap-4">
-              <div className="h-4 bg-surfaceElevated animate-pulse rounded w-full" />
-              <div className="h-4 bg-surfaceElevated animate-pulse rounded w-full" />
-              <div className="h-4 bg-surfaceElevated animate-pulse rounded w-3/4" />
-              <div className="h-4 bg-surfaceElevated animate-pulse rounded w-full" />
-            </div>
-          </div>
-        </div>
-
-        {/* Right Intel Panel */}
-        <div className="border-l border-border bg-bgSurface overflow-auto hidden lg:block">
-          <IntelligencePanel
-            state={state?.shared}
-            isThinking={isThinking}
-            notes={notes ?? []}
-            intents={state?.intents ?? []}
-          />
-        </div>
-      </div>
-    );
-  }
+  const hasComponents = (components ?? []).length > 0;
 
   return (
     <div className={`grid h-screen bg-bg gap-0 relative transition-all duration-300 ${isSidebarCollapsed ? "lg:grid-cols-[0px_1fr_340px]" : "lg:grid-cols-[280px_1fr_340px]"}`}>
@@ -639,9 +620,12 @@ function Workspace({ state, bridge, setAnswers, answers, senseArtifacts, isThink
               ))}
             </div>
           ) : (
-            <p className="text-sm text-fgMuted text-center py-8">
-              Curriculum will appear here
-            </p>
+            <div className="flex flex-col gap-4">
+              <div className="h-10 bg-surfaceElevated animate-pulse rounded-lg" />
+              <div className="h-10 bg-surfaceElevated animate-pulse rounded-lg" />
+              <div className="h-10 bg-surfaceElevated animate-pulse rounded-lg" />
+              <p className="text-[10px] text-center text-fgSubtle uppercase tracking-widest mt-2">{isThinking ? "Constructing Path..." : "Curriculum Pending"}</p>
+            </div>
           )}
         </div>
       </motion.div>
@@ -662,7 +646,7 @@ function Workspace({ state, bridge, setAnswers, answers, senseArtifacts, isThink
       {/* Dynamic Content Window */}
       <div className="flex flex-col p-6 md:p-12 overflow-auto relative">
         <div className="max-w-7xl mx-auto">
-          {components.map((node: any, idx: number) => (
+          {hasComponents ? components.map((node: any, idx: number) => (
             <JSONRenderer
               key={idx}
               node={node}
@@ -673,7 +657,19 @@ function Workspace({ state, bridge, setAnswers, answers, senseArtifacts, isThink
               isThinking={isThinking}
               disabledButtons={disabledButtons}
             />
-          ))}
+          )) : (
+            <div className="flex flex-col gap-10 min-w-[600px]">
+              <div className="h-12 w-3/5 bg-surfaceElevated animate-pulse rounded-lg" />
+              <div className="h-40 bg-surfaceElevated animate-pulse rounded-2xl" />
+              <div className="flex flex-col gap-4">
+                <div className="h-4 bg-surfaceElevated animate-pulse rounded w-full" />
+                <div className="h-4 bg-surfaceElevated animate-pulse rounded w-full" />
+                <div className="h-4 bg-surfaceElevated animate-pulse rounded w-3/4" />
+                <div className="h-4 bg-surfaceElevated animate-pulse rounded w-full" />
+              </div>
+              <p className="text-xs text-center text-fgSubtle italic">{isThinking ? "Principal Agent is synthesizing your lesson..." : "Waiting for next step"}</p>
+            </div>
+          )}
         </div>
       </div>
 
@@ -763,7 +759,8 @@ function App() {
     bridge.onUpdate((payload: any) => {
       const data = payload?.data ?? payload;
       setState(data);
-      if (data?.shared?.learningSurface) {
+      const shared = data?.shared;
+      if (shared?.learningSurface || shared?.curriculum || shared?.questions) {
         setView("workspace");
       }
     });

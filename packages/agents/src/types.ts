@@ -107,6 +107,7 @@ export interface SharedUnderstandingState {
     kind: string;
     title: string;
   }>;
+  activeAgent?: string;
   lastUpdatedAt: number;
 }
 

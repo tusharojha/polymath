@@ -18,11 +18,16 @@ export class UIBuilderAgent implements Agent {
     if (!hasContext) return null;
 
     let surface;
-    try {
-      surface = await this.composeSurfaceLLM(state);
-    } catch (err) {
-      console.error("LLM UI Composition failed, falling back to procedural:", err);
-      surface = this.composeSurfaceProcedural(state);
+    // Default to procedural for speed and rate-limit conservation
+    surface = this.composeSurfaceProcedural(state);
+
+    if (!surface) {
+      try {
+        surface = await this.composeSurfaceLLM(state);
+      } catch (err) {
+        console.error("LLM UI Composition failed:", err);
+        return null;
+      }
     }
 
     if (!surface) return null;
@@ -246,6 +251,31 @@ Return ONLY valid json format.
       .filter((s: any) => s.payload?.kind === "sense-output")
       .forEach((s: any) => {
         (s.payload.output.artifacts || []).forEach((art: any) => {
+          if (art.kind === "experiment" && art.code) {
+            artifactMap.set(`experiment-${unitId}`, {
+              type: "component",
+              componentName: "ExperimentViewer",
+              props: { code: art.code }
+            });
+          }
+          if (art.kind === "experiment_stub") {
+            artifactMap.set("experiment_stub", {
+              type: "flex",
+              flexBoxProperties: { className: "flex-col gap-3 p-5 rounded-xl border border-border bg-surface my-4" },
+              contents: [
+                { type: "component", componentName: "Text", props: { children: art.title || "Interactive Lab", className: "font-bold text-fg" } },
+                { type: "component", componentName: "Text", props: { children: art.description || "Load the experiment when ready.", className: "text-sm text-fgMuted" } },
+                {
+                  type: "component",
+                  componentName: "Button",
+                  props: { children: "Load Experiment", className: "btn btn-solid w-full" },
+                  onSubmit: "Generate and load the interactive experiment for this concept.",
+                  sduiAction: "load-experiment",
+                  sduiData: { prompt: art.prompt }
+                }
+              ]
+            });
+          }
           if (art.kind === "infographic" && art.url) {
             artifactMap.set("infographic", {
               type: "flex",
@@ -286,7 +316,7 @@ Return ONLY valid json format.
         if (senseTarget) {
           // Find matching artifact
           let component = null;
-          if (senseTarget.type === "experiment") component = artifactMap.get(`experiment-${unitId}`);
+          if (senseTarget.type === "experiment") component = artifactMap.get(`experiment-${unitId}`) ?? artifactMap.get("experiment_stub");
           else if (senseTarget.type === "infographic") component = artifactMap.get("infographic");
 
           if (component) {
