@@ -78,6 +78,27 @@ export class PlannerAgent implements Agent {
       };
     }
 
+    // RULE: Deepen topic on demand
+    const deepenSignal = newSignals.find(s => s.payload?.kind === "ui-intent" && s.payload?.action === "deepen-topic");
+    if (deepenSignal) {
+      const data = deepenSignal.payload?.data as any;
+      const nextDepth = Math.min(5, (state.depthLevel || 2) + 1);
+      return {
+        statePatch: {
+          depthLevel: nextDepth,
+        },
+        intents: [
+          { type: "deepen-topic", topic: data?.topic || state.goal.title, depthTarget: nextDepth },
+          {
+            type: "amend-curriculum",
+            topic: state.goal.title,
+            request: `Deepen the unit "${data?.topic || state.goal.title}" to depth level ${nextDepth}. Add advanced subtopics or exercises if needed.`
+          }
+        ],
+        notes: ["User requested deeper coverage; amending curriculum."]
+      };
+    }
+
     // RULE: If curriculum exists and no active step, start with the first unit
     if (state.curriculum && !state.activeStep) {
       const firstUnit = state.curriculum.modules?.[0]?.units?.[0];

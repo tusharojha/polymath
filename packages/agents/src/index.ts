@@ -18,4 +18,5 @@ export * from "./agents/teaching-agent";
 export * from "./agents/labs-agent";
 export * from "./agents/interjection-agent";
 export * from "./agents/mermaid-fix-agent";
+export * from "./agents/quiz-check-agent";
 export * from "./agents/ui-builder-agent";

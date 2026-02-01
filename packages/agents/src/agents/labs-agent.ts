@@ -30,16 +30,18 @@ export class LabsAgent implements Agent {
   constructor(private readonly llm: LLMClient) { }
 
   async observe(input: AgentInput): Promise<AgentUpdate | null> {
-    const { state } = input;
-    const activeUnitId = state.activeStep?.unitId;
+    const { state, newSignals } = input;
+    const labSignal = newSignals.find(
+      (s) => s.payload?.kind === "ui-intent" && s.payload?.action === "generate-lab"
+    );
+    if (!labSignal) return null;
+
+    const activeUnitId =
+      (labSignal.payload?.data as any)?.unitId || state.activeStep?.unitId;
     if (!activeUnitId) return null;
 
     const teachingContent = state.knowledgeRepository?.[activeUnitId];
     if (!teachingContent) return null;
-
-    // Check if we specifically want an experiment or if it's generally relevant
-    const hasExperimentSense = teachingContent.senses.some(s => s.type === "experiment");
-    if (!hasExperimentSense) return null;
 
     // Check if we already have it in state
     const existingExperiment = state.artifacts?.find(a => a.kind === "experiment" && (a as any).unitId === activeUnitId);

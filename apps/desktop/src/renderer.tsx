@@ -14,6 +14,7 @@ import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
 import mermaid from "mermaid";
 import "katex/dist/katex.min.css";
+import confetti from "canvas-confetti";
 
 mermaid.initialize({
   startOnLoad: false,
@@ -127,6 +128,82 @@ function CodeBlock({ code, language }: { code: string; language?: string }) {
     </pre>
   );
 }
+
+function QuizBlock({
+  question,
+  choices,
+  answerType,
+  expected,
+  feedback
+}: {
+  question: string;
+  choices?: string[];
+  answerType: "text" | "choice";
+  expected?: string;
+  feedback?: { ok: boolean; message: string } | null;
+}) {
+  const [value, setValue] = useState("");
+  const [localFeedback, setLocalFeedback] = useState<{ ok: boolean; message: string } | null>(null);
+
+  const checkAnswer = () => {
+    if (!expected) {
+      setLocalFeedback({ ok: false, message: "No answer key provided." });
+      return;
+    }
+    const normalize = (s: string) =>
+      s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+    const expectedParts = expected.split("|").map((p) => normalize(p)).filter(Boolean);
+    const normalized = normalize(value);
+    const ok = expectedParts.length > 0
+      ? expectedParts.some((p) => normalized.includes(p))
+      : normalized === normalize(expected);
+
+    setLocalFeedback({
+      ok,
+      message: ok ? "Correct — nice work." : "Not quite. Try again."
+    });
+    if (ok) {
+      confetti({ particleCount: 60, spread: 70, origin: { y: 0.6 } });
+    }
+  };
+
+  const effectiveFeedback = localFeedback || feedback;
+  return (
+    <div className="flex flex-col gap-3 p-4 rounded-xl border border-border bg-surface">
+      <div className="text-sm font-semibold text-fg">{question}</div>
+      {answerType === "choice" ? (
+        <select
+          className="input"
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+        >
+          <option value="" disabled>Select an answer</option>
+          {(choices || []).map((c, i) => (
+            <option key={i} value={c}>{c}</option>
+          ))}
+        </select>
+      ) : (
+        <input
+          className="input"
+          placeholder="Type your answer..."
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+        />
+      )}
+      <button className="btn btn-solid" onClick={checkAnswer}>
+        Check Answer
+      </button>
+      {effectiveFeedback && (
+        <div className={`text-xs ${effectiveFeedback.ok ? "text-success" : "text-danger"}`}>
+          {effectiveFeedback.message}
+        </div>
+      )}
+      {!effectiveFeedback && expected && (
+        <div className="text-[10px] text-fgSubtle">Expected: {expected}</div>
+      )}
+    </div>
+  );
+}
 // --- JSON-First Renderer (SDUI) ---
 
 const TailwindComponents: Record<string, any> = {
@@ -195,6 +272,7 @@ const TailwindComponents: Record<string, any> = {
   SvgBlock: (props: any) => <SvgBlock svg={props.svg} />,
   MermaidBlock: (props: any) => <MermaidBlock code={props.code} onFix={props.onFix} />,
   CodeBlock: (props: any) => <CodeBlock code={props.code} language={props.language} />,
+  QuizBlock: (props: any) => <QuizBlock {...props} />,
   Image: (props: any) => <img {...props} />
 };
 
@@ -268,6 +346,11 @@ function JSONRenderer({ node, state, setState, onIntent, path, isThinking, disab
         );
     }
 
+    if (node.componentName === "QuizBlock") {
+      const feedback = state?.quizResults?.[`${restProps.unitId}:${restProps.mediaIndex}`] || null;
+      interactionProps.feedback = feedback;
+    }
+
     // Void elements or components that handle their own children specifically
     const handsOffChildren = ["Input", "Select", "Divider", "img", "br", "hr"].includes(node.componentName);
 
@@ -324,15 +407,49 @@ function IntelligencePanel({
   isThinking,
   notes,
   intents,
+  readAloudText,
+  topic,
 }: {
   state: any;
   isThinking: boolean;
   notes: string[];
   intents: any[];
+  readAloudText?: string;
+  topic?: string;
 }) {
   const [isReading, setIsReading] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [isMusicPlaying, setIsMusicPlaying] = useState(false);
+  const [musicLabel, setMusicLabel] = useState<string | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  const stopReading = () => {
+    if ("speechSynthesis" in window) {
+      window.speechSynthesis.cancel();
+    }
+  };
+
+  const startReading = () => {
+    if (!readAloudText || !("speechSynthesis" in window)) return;
+    stopReading();
+    const utterance = new SpeechSynthesisUtterance(readAloudText);
+    utterance.rate = 1;
+    utterance.pitch = 1;
+    window.speechSynthesis.speak(utterance);
+  };
+
+  const pickMusic = async () => {
+    const query = encodeURIComponent(`${topic || state?.goal?.title || "focus"} focus music`);
+    const url = `https://itunes.apple.com/search?term=${query}&media=music&entity=song&limit=1`;
+    const res = await fetch(url);
+    const json = await res.json();
+    const track = json?.results?.[0];
+    if (!track?.previewUrl) return null;
+    return {
+      url: track.previewUrl as string,
+      label: `${track.trackName} — ${track.artistName}`,
+    };
+  };
 
 
 
@@ -506,7 +623,12 @@ function IntelligencePanel({
           {/* Read Aloud */}
           <div
             className={`p-3 rounded-lg cursor-pointer transition-all duration-200 flex flex-row items-center gap-3 hover:translate-x-0.5 ${isReading ? "bg-accentSoft hover:bg-accentSoft" : "bg-bgSurface hover:bg-surfaceElevated"}`}
-            onClick={() => setIsReading(!isReading)}
+            onClick={() => {
+              const next = !isReading;
+              setIsReading(next);
+              if (next) startReading();
+              else stopReading();
+            }}
           >
             <Volume2 size={18} className={isReading ? "text-accent" : "text-fgMuted"} />
             <div className="flex flex-col flex-1">
@@ -530,12 +652,29 @@ function IntelligencePanel({
           {/* Background Music */}
           <div
             className={`p-3 rounded-lg cursor-pointer transition-all duration-200 flex flex-row items-center gap-3 hover:translate-x-0.5 ${isMusicPlaying ? "bg-accentSoft hover:bg-accentSoft" : "bg-bgSurface hover:bg-surfaceElevated"}`}
-            onClick={() => setIsMusicPlaying(!isMusicPlaying)}
+            onClick={async () => {
+              const next = !isMusicPlaying;
+              setIsMusicPlaying(next);
+              if (!next) {
+                audioRef.current?.pause();
+                return;
+              }
+              const picked = await pickMusic();
+              if (!picked) return;
+              setMusicLabel(picked.label);
+              if (!audioRef.current) {
+                audioRef.current = new Audio(picked.url);
+              } else {
+                audioRef.current.src = picked.url;
+              }
+              audioRef.current.loop = true;
+              await audioRef.current.play();
+            }}
           >
             <Music size={18} className={isMusicPlaying ? "text-accent" : "text-fgMuted"} />
             <div className="flex flex-col flex-1">
               <p className="text-sm font-medium text-fg">Focus Music</p>
-              <p className="text-xs text-fgMuted">{isMusicPlaying ? "Playing" : "Start ambient sound"}</p>
+              <p className="text-xs text-fgMuted">{isMusicPlaying ? (musicLabel ? `Playing: ${musicLabel}` : "Playing") : "Start ambient sound"}</p>
             </div>
           </div>
         </div>
@@ -548,6 +687,7 @@ function Workspace({ state, bridge, setAnswers, answers, senseArtifacts, isThink
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [expandedNodes, setExpandedNodes] = useState<Record<string, boolean>>({});
   const [disabledButtons, setDisabledButtons] = useState<Record<string, boolean>>({});
+  const [selectionMenu, setSelectionMenu] = useState<{ text: string; x: number; y: number } | null>(null);
 
   // SDUI State
   const surface = state?.shared?.learningSurface;
@@ -613,6 +753,41 @@ function Workspace({ state, bridge, setAnswers, answers, senseArtifacts, isThink
       setDisabledButtons({});
     }
   }, [isThinking, state]); // Add state to trigger if update arrives after thinking
+
+  useEffect(() => {
+    const handleMouseUp = () => {
+      const selection = window.getSelection();
+      const text = selection?.toString()?.trim() || "";
+      if (!text || text.length < 8) {
+        setSelectionMenu(null);
+        return;
+      }
+      const range = selection?.getRangeAt(0);
+      if (!range) return;
+      const rect = range.getBoundingClientRect();
+      setSelectionMenu({
+        text,
+        x: rect.left + rect.width / 2,
+        y: rect.top - 8
+      });
+    };
+
+    const handleScroll = () => setSelectionMenu(null);
+    const handleClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (target.closest(".selection-popover")) return;
+      setSelectionMenu(null);
+    };
+
+    document.addEventListener("mouseup", handleMouseUp);
+    document.addEventListener("scroll", handleScroll, true);
+    document.addEventListener("mousedown", handleClick);
+    return () => {
+      document.removeEventListener("mouseup", handleMouseUp);
+      document.removeEventListener("scroll", handleScroll, true);
+      document.removeEventListener("mousedown", handleClick);
+    };
+  }, []);
 
   const toggleNode = (id: string) => {
     setExpandedNodes((prev) => ({ ...prev, [id]: !prev[id] }));
@@ -783,6 +958,31 @@ function Workspace({ state, bridge, setAnswers, answers, senseArtifacts, isThink
             </div>
           )}
         </div>
+
+        {selectionMenu && (
+          <div
+            className="selection-popover fixed z-50 px-3 py-2 rounded-lg bg-surface border border-border shadow-lg text-xs flex flex-row gap-2 items-center"
+            style={{ left: selectionMenu.x, top: selectionMenu.y }}
+          >
+            <span className="text-fgMuted">Selected:</span>
+            <span className="text-fg font-semibold max-w-[220px] truncate">{selectionMenu.text}</span>
+            <button
+              className="btn btn-solid px-3 py-1 text-xs"
+              onClick={() => {
+                handleIntent(
+                  `User wants to go deeper into: ${selectionMenu.text}`,
+                  state?.shared,
+                  "deepen-topic",
+                  undefined,
+                  { topic: selectionMenu.text, unitId: state?.shared?.activeStep?.unitId }
+                );
+                setSelectionMenu(null);
+              }}
+            >
+              Go Deeper
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Intelligence Panel */}

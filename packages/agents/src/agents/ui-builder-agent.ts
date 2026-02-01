@@ -229,6 +229,26 @@ Return ONLY valid json format.
       if (item.kind === "mermaid") {
         return { ...baseFlex, contents: [...(titleComp ? [titleComp] : []), { type: "component", componentName: "MermaidBlock", props: { code: item.content, unitId, mediaIndex: idx } }] };
       }
+      if (item.kind === "quiz") {
+        return {
+          ...baseFlex,
+          contents: [
+            ...(titleComp ? [titleComp] : []),
+            {
+              type: "component",
+              componentName: "QuizBlock",
+              props: {
+                question: item.question || item.content,
+                choices: item.choices,
+                answerType: item.answerType || (item.choices?.length ? "choice" : "text"),
+                expected: item.answer,
+                unitId,
+                mediaIndex: idx
+              }
+            }
+          ]
+        };
+      }
       if (item.kind === "markdown" && typeof item.content === "string") {
         const mermaidMatch = item.content.match(/```mermaid([\s\S]*?)```/i);
         if (mermaidMatch) {
@@ -280,8 +300,8 @@ Return ONLY valid json format.
                   componentName: "Button",
                   props: { children: "Load Experiment", className: "btn btn-solid w-full" },
                   onSubmit: "Generate and load the interactive experiment for this concept.",
-                  sduiAction: "load-experiment",
-                  sduiData: { prompt: art.prompt }
+                  sduiAction: "generate-lab",
+                  sduiData: { prompt: art.prompt, unitId }
                 }
               ]
             });
@@ -306,17 +326,14 @@ Return ONLY valid json format.
     // INTERLEAVING LOGIC
     const contents: any[] = [];
     const markerRegex = /::(media|sense):(\d+)::/g;
-    const hasMarkers = markerRegex.test(rawExplanation);
-    markerRegex.lastIndex = 0;
     let lastIndex = 0;
     let match;
 
-    const primaryExplanation = rawExplanation.replace(/::(media|sense):(\d+)::/g, "").trim();
-    if (primaryExplanation) {
-      contents.push({ type: "component", componentName: "Text", props: { children: primaryExplanation, className: "text-lg text-fgMuted leading-relaxed markdown-content" } });
-    }
-
     while ((match = markerRegex.exec(rawExplanation)) !== null) {
+      const textBefore = rawExplanation.substring(lastIndex, match.index).trim();
+      if (textBefore) {
+        contents.push({ type: "component", componentName: "Text", props: { children: textBefore, className: "text-lg text-fgMuted leading-relaxed markdown-content" } });
+      }
 
       const type = match[1];
       const index = parseInt(match[2], 10);
@@ -326,7 +343,6 @@ Return ONLY valid json format.
       } else if (type === "sense") {
         const senseTarget = teachingContent?.senses?.[index];
         if (senseTarget) {
-          // Find matching artifact
           let component = null;
           if (senseTarget.type === "experiment") component = artifactMap.get(`experiment-${unitId}`) ?? artifactMap.get("experiment_stub");
           else if (senseTarget.type === "infographic") component = artifactMap.get("infographic");
@@ -341,7 +357,13 @@ Return ONLY valid json format.
       lastIndex = markerRegex.lastIndex;
     }
 
-    if (!hasMarkers) {
+    const remainingText = rawExplanation.substring(lastIndex).trim();
+    if (remainingText) {
+      contents.push({ type: "component", componentName: "Text", props: { children: remainingText, className: "text-lg text-fgMuted leading-relaxed markdown-content" } });
+    }
+
+    if (contents.length === 0 && rawExplanation) {
+      contents.push({ type: "component", componentName: "Text", props: { children: rawExplanation, className: "text-lg text-fgMuted leading-relaxed markdown-content" } });
       contents.push(...mediaComponents);
       artifactMap.forEach(v => contents.push(v));
     }
@@ -376,7 +398,7 @@ Return ONLY valid json format.
               flexBoxProperties: { className: "flex-row gap-4 mt-8" },
               contents: [
                 { type: "component", componentName: "Button", props: { children: "Next Concept", className: "btn btn-solid" }, onSubmit: "Advance to the next unit", sduiAction: "next-unit" },
-                { type: "component", componentName: "Button", props: { children: "Deep Dive", className: "btn btn-ghost" }, onSubmit: "Request specialized details", sduiAction: "deep-dive" }
+                { type: "component", componentName: "Button", props: { children: "Go Deeper", className: "btn btn-ghost" }, onSubmit: "Increase depth on this topic", sduiAction: "deepen-topic", sduiData: { unitId, topic: title } }
               ]
             }
           ]

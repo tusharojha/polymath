@@ -15,6 +15,8 @@ import {
   TeachingAgent,
   InterjectionAgent,
   MermaidFixAgent,
+  QuizCheckAgent,
+  LabsAgent,
   UIBuilderAgent,
 } from "@polymath/agents";
 import { BrainMemory } from "./memory";
@@ -89,8 +91,10 @@ export class BrainRuntime {
         new RevisionDepthAgent(),
         new SynthesisAgent(),
         new TeachingAgent(llm),
+        new LabsAgent(llm),
         new InterjectionAgent(llm),
         new MermaidFixAgent(llm),
+        new QuizCheckAgent(llm),
         new UIBuilderAgent(llm),
       ],
       initialState: store.get(),

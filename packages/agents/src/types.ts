@@ -32,10 +32,14 @@ export interface TeachingContent {
   explanation: string;
   firstPrinciples: string[];
   media?: Array<{
-    kind: "svg" | "diagram" | "markdown" | "code" | "mermaid";
+    kind: "svg" | "diagram" | "markdown" | "code" | "mermaid" | "quiz";
     title?: string;
     content: string;
     language?: string;
+    question?: string;
+    choices?: string[];
+    answer?: string;
+    answerType?: "text" | "choice";
   }>;
   senses: Array<{
     type: SenseType;
@@ -86,6 +90,7 @@ export interface SharedUnderstandingState {
   curriculumLocked?: boolean;
   unitStates?: Record<ID, any>; // Persistent form/local state for units
   knowledgeRepository?: Record<ID, TeachingContent>; // Persisted explanations
+  quizResults?: Record<string, { ok: boolean; message: string }>;
   activeStep?: LearningStep;
   pendingUnitId?: ID | null;
   learningSurface?: {

@@ -8,17 +8,21 @@ UNIT: {{unitTitle}}
 RATIONALE: {{unitRationale}}
 USER LEVEL: {{userLevel}}
 USER CONTEXT: {{userContext}}
+DEPTH CAP: {{depthCap}}
+MAX SENSES: {{maxSenses}}
 
 INSTRUCTIONS:
 1. Long-form Exposition: Provide a comprehensive markdown explanation. Start from irreducible primitives and build up to complex interactions.
    - If USER LEVEL is "beginner", keep explanations concrete and avoid jargon.
    - If USER LEVEL is "intermediate", add formal terms with brief definitions.
    - If USER LEVEL is "advanced", emphasize nuances, edge cases, and trade-offs.
-2. Integrated "Senses": Suggest specific visuals, infographics, experiments, or research citations to ground the theory.
+   - Respect DEPTH CAP: do not go beyond this depth level in the initial pass.
+2. Integrated "Senses": Suggest specific visuals, infographics, experiments, or research citations to ground the theory. Do not exceed MAX SENSES.
 3. RICH CONTENT:
     - **Tables**: Use markdown tables for comparisons or structured data.
     - **Math (KaTeX)**: Use standard LaTeX notation for equations (e.g. $E=mc^2$ or $$H = \sum p_i \log p_i$$).
     - **Mermaid Diagrams**: Use valid Mermaid.js syntax for mind maps, flowcharts, or architecture. Indicate with kind: "mermaid".
+    - **Quick Checks**: When helpful, add 1–2 short quizzes using kind: "quiz" with question + answer (and choices if multiple choice).
 4. Inline Layout: You MUST interleave media and senses within the text. Use markers like \`::media:N::\` or \`::sense:N::\`.
 5. Rich Media: Include at least 1-2 professional diagrams (SVG or Mermaid).
 
@@ -27,7 +31,7 @@ Return STRICT JSON format:
   "explanation": "Markdown text (with tables/math) and ::media:0:: markers.",
   "firstPrinciples": ["primitive 1", "primitive 2"],
   "media": [
-    { "kind": "svg" | "mermaid" | "markdown" | "code", "title": "Optional title", "content": "The actual SVG code or Mermaid code or markdown", "language": "js|ts|python|none" }
+    { "kind": "svg" | "mermaid" | "markdown" | "code" | "quiz", "title": "Optional title", "content": "The actual SVG code or Mermaid code or markdown", "language": "js|ts|python|none", "question": "Optional for quiz", "choices": ["A","B"], "answer": "Expected answer", "answerType": "text|choice" }
   ],
   "senses": [
     { "type": "visual" | "sound" | "infographic" | "experiment", "prompt": "precise description", "reasoning": "educational value" }
@@ -92,11 +96,16 @@ export class TeachingAgent implements Agent {
       (state.knowledgeLevel >= 4 ? "advanced" : state.knowledgeLevel >= 2 ? "intermediate" : "beginner");
     const userContext = JSON.stringify(state.answers ?? {});
 
+    const maxSenses = 2;
+    const depthCap = Math.max(1, Math.min(5, state.depthLevel || 2));
+
     const prompt = TEACHING_PROMPT
       .replace("{{unitTitle}}", unit.title)
       .replace("{{unitRationale}}", (unit as any).objective || "Foundational concept")
       .replace("{{userLevel}}", userLevel)
-      .replace("{{userContext}}", userContext);
+      .replace("{{userContext}}", userContext)
+      .replace("{{depthCap}}", String(depthCap))
+      .replace("{{maxSenses}}", String(maxSenses));
 
     try {
       const response = await this.llm.generate(prompt);
@@ -110,7 +119,7 @@ export class TeachingAgent implements Agent {
         explanation: parsed.explanation || parsed.summary || "Generating lesson content...",
         firstPrinciples: parsed.firstPrinciples ?? [],
         media: Array.isArray(parsed.media) ? parsed.media : [],
-        senses: parsed.senses ?? [],
+        senses: (parsed.senses ?? []).slice(0, maxSenses),
         interjections: parsed.interjections ?? []
       };
 
