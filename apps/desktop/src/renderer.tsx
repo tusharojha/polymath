@@ -10,6 +10,23 @@ import {
 import { Sparkles, Brain, LayoutDashboard, Send, ChevronLeft, ChevronRight, Volume2, Mic, Music, Star, Award } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import remarkMath from "remark-math";
+import rehypeKatex from "rehype-katex";
+import mermaid from "mermaid";
+import "katex/dist/katex.min.css";
+
+mermaid.initialize({
+  startOnLoad: false,
+  theme: 'base',
+  themeVariables: {
+    primaryColor: '#38bdf8',
+    primaryTextColor: '#f8fafc',
+    primaryBorderColor: '#0ea5e9',
+    lineColor: '#38bdf8',
+    secondaryColor: '#1e293b',
+    tertiaryColor: '#0b1020'
+  }
+});
 
 type BrainResponse = {
   ok: boolean;
@@ -22,10 +39,65 @@ const registry = createDefaultSenseRegistry(defaultSensePlugins);
 const MotionBox = motion.div;
 
 const MarkdownBlock = ({ content }: { content: string }) => (
-  <div className="prose prose-sm max-w-none text-fg">
-    <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
+  <div className="prose prose-base max-w-none text-fg prose-headings:text-fg prose-headings:font-bold prose-headings:tracking-tight prose-h1:text-3xl prose-h1:leading-tight prose-h2:text-2xl prose-h3:text-xl prose-h4:text-lg prose-p:text-fgMuted prose-strong:text-fg prose-a:text-accent prose-code:text-accent prose-code:bg-accent/10 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded">
+    <ReactMarkdown
+      remarkPlugins={[remarkGfm, remarkMath]}
+      rehypePlugins={[rehypeKatex]}
+    >
+      {content}
+    </ReactMarkdown>
   </div>
 );
+
+const MermaidBlock = ({ code, onFix }: { code: string; onFix?: () => void }) => {
+  const [svg, setSvg] = useState<string>("");
+  const [error, setError] = useState<string | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!code) return;
+    const id = `mermaid-${Math.random().toString(36).substring(2, 9)}`;
+
+    try {
+      mermaid.parse(code);
+      mermaid.render(id, code)
+        .then(({ svg }) => setSvg(svg))
+        .catch(err => {
+          console.error("Mermaid error:", err);
+          setError("Mermaid parse error");
+        });
+    } catch (err) {
+      console.error("Mermaid sync error:", err);
+      setError("Mermaid parse error");
+    }
+  }, [code]);
+
+  if (error) {
+    return (
+      <div className="flex flex-col gap-3 p-4 rounded-xl border border-border bg-surface my-4">
+        <div className="text-xs text-danger font-semibold">Diagram error — showing source</div>
+        <pre className="text-xs text-fgMuted whitespace-pre-wrap">{code}</pre>
+        {onFix && (
+          <button className="btn btn-solid w-full" onClick={onFix}>
+            Fix Diagram
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  if (!svg) {
+    return <div className="text-xs text-fgSubtle">Rendering diagram...</div>;
+  }
+
+  return (
+    <div
+      ref={containerRef}
+      className="flex justify-center p-4 bg-surface rounded-xl border border-border overflow-auto my-6"
+      dangerouslySetInnerHTML={{ __html: svg }}
+    />
+  );
+};
 
 function ExperimentViewer({ code }: { code: string }) {
   const srcDoc = `<!doctype html><html><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /></head><body style="margin:0;background:#0b0f16;color:#e5e7eb;">${code}</body></html>`;
@@ -61,15 +133,18 @@ const TailwindComponents: Record<string, any> = {
   Box: (props: any) => <div {...props} />,
   Container: (props: any) => <div className="container mx-auto px-4" {...props} />,
   Heading: (props: any) => {
-    const sizes: any = { xs: "text-sm font-bold uppercase", sm: "text-lg font-bold", md: "text-xl font-bold", lg: "text-2xl font-bold", xl: "text-3xl font-bold", "2xl": "text-4xl font-extrabold" };
-    return <h2 className={`${sizes[props.size || "md"]} text-fg ${props.className || ""}`} {...props} />;
+    const sizes: any = { xs: "text-sm font-bold uppercase tracking-widest", sm: "text-lg font-semibold", md: "text-2xl font-bold", lg: "text-3xl font-extrabold", xl: "text-4xl font-extrabold", "2xl": "text-5xl font-black" };
+    return <h2 className={`${sizes[props.size || "md"]} text-fg tracking-tight ${props.className || ""}`} {...props} />;
   },
   Text: (props: any) => {
     const sizes: any = { xs: "text-xs", sm: "text-sm", md: "text-base", lg: "text-lg", xl: "text-xl" };
-    const styles: any = { sm: "text-sm font-medium" }; // Mapping textStyle="sm"
+    const styles: any = { sm: "text-sm font-medium" };
 
-    // Convert Chakra color props to Tailwind classes if possible, or style
-    let className = `${sizes[props.fontSize || "md"]} ${styles[props.textStyle] || ""} text-fg`;
+    if (props.className?.includes("markdown-content")) {
+      return <MarkdownBlock content={props.children} />;
+    }
+
+    let className = `${sizes[props.fontSize || "md"]} ${styles[props.textStyle] || ""} text-fg leading-relaxed`;
     if (props.color === "fgMuted") className += " text-fgMuted";
     if (props.color === "fgSubtle") className += " text-fgSubtle";
     if (props.color === "accent") className += " text-accent";
@@ -118,6 +193,7 @@ const TailwindComponents: Record<string, any> = {
   Card: (props: any) => <div className={`card ${props.className || ""}`} {...props} />,
   ExperimentViewer: (props: any) => <ExperimentViewer code={props.code} />,
   SvgBlock: (props: any) => <SvgBlock svg={props.svg} />,
+  MermaidBlock: (props: any) => <MermaidBlock code={props.code} onFix={props.onFix} />,
   CodeBlock: (props: any) => <CodeBlock code={props.code} language={props.language} />,
   Image: (props: any) => <img {...props} />
 };
@@ -176,11 +252,47 @@ function JSONRenderer({ node, state, setState, onIntent, path, isThinking, disab
       interactionProps.className = `${restProps.className || ""} ${isDisabled ? "opacity-50 cursor-not-allowed" : ""}`;
     }
 
+    // 3. Mermaid fix action
+    if (node.componentName === "MermaidBlock" && restProps?.code) {
+      interactionProps.onFix = () =>
+        onIntent(
+          "Fix the Mermaid diagram syntax and re-render.",
+          state,
+          "fix-mermaid",
+          undefined,
+          {
+            unitId: restProps.unitId,
+            mediaIndex: restProps.mediaIndex,
+            code: restProps.code
+          }
+        );
+    }
+
     // Void elements or components that handle their own children specifically
     const handsOffChildren = ["Input", "Select", "Divider", "img", "br", "hr"].includes(node.componentName);
 
     if (handsOffChildren) {
       return <Component {...restProps} {...interactionProps} />;
+    }
+
+    if (node.componentName === "Text" && typeof children === "string") {
+      return (
+        <div className={restProps.className || ""}>
+          <MarkdownBlock content={children} />
+          {node.contents?.map((child: any, idx: number) => (
+            <JSONRenderer
+              key={idx}
+              node={child}
+              state={state}
+              setState={setState}
+              onIntent={onIntent}
+              path={`${path}.contents.${idx}`}
+              isThinking={isThinking}
+              disabledButtons={disabledButtons}
+            />
+          ))}
+        </div>
+      );
     }
 
     return (

@@ -231,6 +231,7 @@ export class CurriculumAgent implements Agent {
         statePatch: {
           curriculum,
           curriculumProgress: curriculum.tree ? collectTreeIds(curriculum.tree, {}) : {},
+          pendingUnitId: curriculum.modules?.[0]?.units?.[0]?.id ?? null,
         },
       };
     }
@@ -256,14 +257,15 @@ Draft a 10-15 module specialist-level curriculum. Ground it in the research prov
     const text = await this.llm.generate(prompt);
     if (!text) {
       const curriculum = buildFallbackCurriculum(input.state.goal.title, input.state.goal.id);
-      return {
-        statePatch: {
-          curriculum,
-          curriculumProgress: curriculum.tree ? collectTreeIds(curriculum.tree, {}) : {},
-          curriculumLocked: true,
-        },
-      };
-    }
+    return {
+      statePatch: {
+        curriculum,
+        curriculumProgress: curriculum.tree ? collectTreeIds(curriculum.tree, {}) : {},
+        curriculumLocked: true,
+        pendingUnitId: curriculum.modules?.[0]?.units?.[0]?.id ?? null,
+      },
+    };
+  }
 
     try {
       const parsed = JSON.parse(text) as {
@@ -317,6 +319,7 @@ Draft a 10-15 module specialist-level curriculum. Ground it in the research prov
             phase: "learning",
             curriculumProgress: progress,
             curriculumLocked: true,
+            pendingUnitId: parsed.modules?.[0]?.units?.[0]?.id ?? null,
           },
           notes: ["LLM curriculum parsed from JSON."],
         };
@@ -334,14 +337,15 @@ Draft a 10-15 module specialist-level curriculum. Ground it in the research prov
     }
 
     const curriculum = buildFallbackCurriculum(input.state.goal.title, input.state.goal.id);
-    return {
-      statePatch: {
-        curriculum,
-        curriculumProgress: curriculum.tree ? collectTreeIds(curriculum.tree, {}) : {},
-        phase: "learning",
-        curriculumLocked: true,
-      },
-      notes: ["LLM output received; using fallback parser for v1."],
-    };
-  }
+      return {
+        statePatch: {
+          curriculum,
+          curriculumProgress: curriculum.tree ? collectTreeIds(curriculum.tree, {}) : {},
+          phase: "learning",
+          curriculumLocked: true,
+          pendingUnitId: curriculum.modules?.[0]?.units?.[0]?.id ?? null,
+        },
+        notes: ["LLM output received; using fallback parser for v1."],
+      };
+    }
 }

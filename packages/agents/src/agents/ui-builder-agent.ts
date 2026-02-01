@@ -90,7 +90,7 @@ Return a single JSON object with this exact structure:
 
 DESIGN RULES:
 1. Use "flex" for layout. Use "className" in flexBoxProperties for Tailwind classes (e.g. "flex-col gap-4").
-2. Use "component" for leaf nodes. Supported: Heading, Text, Box, Button, Input, Select, Divider, ExperimentViewer, SvgBlock, CodeBlock.
+2. Use "component" for leaf nodes. Supported: Heading, Text, Box, Button, Input, Select, Divider, ExperimentViewer, SvgBlock, CodeBlock, MermaidBlock.
 3. Use "className" prop for styling. Do NOT use style props like "bg", "p", "m", "color".
 4. Use standard Tailwind utility classes.
 5. Create a rich, newspaper-like layout for learning content.
@@ -208,7 +208,7 @@ Return ONLY valid json format.
     const teachingContent = unitId ? state.knowledgeRepository?.[unitId] : null;
 
     const title = teachingContent?.title ?? step?.title ?? state.goal?.title ?? "Learning";
-    const rawExplanation = teachingContent?.explanation ?? step?.rationale ?? "Loading content...";
+    const rawExplanation = (teachingContent?.explanation ?? step?.rationale ?? "").toString().trim() || "Generating lesson content...";
 
     // Resolve Media Components
     const mediaComponents = (teachingContent?.media || []).map((item: any, idx: number) => {
@@ -225,6 +225,16 @@ Return ONLY valid json format.
 
       if (item.kind === "svg" || item.kind === "diagram") {
         return { ...baseFlex, contents: [...(titleComp ? [titleComp] : []), { type: "component", componentName: "SvgBlock", props: { svg: item.content } }] };
+      }
+      if (item.kind === "mermaid") {
+        return { ...baseFlex, contents: [...(titleComp ? [titleComp] : []), { type: "component", componentName: "MermaidBlock", props: { code: item.content, unitId, mediaIndex: idx } }] };
+      }
+      if (item.kind === "markdown" && typeof item.content === "string") {
+        const mermaidMatch = item.content.match(/```mermaid([\s\S]*?)```/i);
+        if (mermaidMatch) {
+          const mermaidCode = mermaidMatch[1].trim();
+          return { ...baseFlex, contents: [...(titleComp ? [titleComp] : []), { type: "component", componentName: "MermaidBlock", props: { code: mermaidCode, unitId, mediaIndex: idx } }] };
+        }
       }
       if (item.kind === "code") {
         return { ...baseFlex, contents: [...(titleComp ? [titleComp] : []), { type: "component", componentName: "CodeBlock", props: { code: item.content, language: item.language } }] };
@@ -296,15 +306,17 @@ Return ONLY valid json format.
     // INTERLEAVING LOGIC
     const contents: any[] = [];
     const markerRegex = /::(media|sense):(\d+)::/g;
+    const hasMarkers = markerRegex.test(rawExplanation);
+    markerRegex.lastIndex = 0;
     let lastIndex = 0;
     let match;
 
+    const primaryExplanation = rawExplanation.replace(/::(media|sense):(\d+)::/g, "").trim();
+    if (primaryExplanation) {
+      contents.push({ type: "component", componentName: "Text", props: { children: primaryExplanation, className: "text-lg text-fgMuted leading-relaxed markdown-content" } });
+    }
+
     while ((match = markerRegex.exec(rawExplanation)) !== null) {
-      // Add text before marker
-      const textBefore = rawExplanation.substring(lastIndex, match.index).trim();
-      if (textBefore) {
-        contents.push({ type: "component", componentName: "Text", props: { children: textBefore, className: "text-lg text-fgMuted leading-relaxed markdown-content" } });
-      }
 
       const type = match[1];
       const index = parseInt(match[2], 10);
@@ -329,17 +341,8 @@ Return ONLY valid json format.
       lastIndex = markerRegex.lastIndex;
     }
 
-    // Add remaining text
-    const remainingText = rawExplanation.substring(lastIndex).trim();
-    if (remainingText) {
-      contents.push({ type: "component", componentName: "Text", props: { children: remainingText, className: "text-lg text-fgMuted leading-relaxed markdown-content" } });
-    }
-
-    // Fallback: If no markers were found, just render everything sequentially as before
-    if (contents.length === 0 && rawExplanation) {
-      contents.push({ type: "component", componentName: "Text", props: { children: rawExplanation, className: "text-lg text-fgMuted leading-relaxed markdown-content" } });
+    if (!hasMarkers) {
       contents.push(...mediaComponents);
-      // Add artifacts that weren't interleaved
       artifactMap.forEach(v => contents.push(v));
     }
 

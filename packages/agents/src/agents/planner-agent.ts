@@ -78,6 +78,17 @@ export class PlannerAgent implements Agent {
       };
     }
 
+    // RULE: If curriculum exists and no active step, start with the first unit
+    if (state.curriculum && !state.activeStep) {
+      const firstUnit = state.curriculum.modules?.[0]?.units?.[0];
+      if (firstUnit) {
+        return {
+          statePatch: { phase: "learning" },
+          intents: [{ type: "begin-teaching", unitId: firstUnit.id }]
+        };
+      }
+    }
+
     return null;
   }
 
@@ -113,6 +124,14 @@ export class PlannerAgent implements Agent {
         edges: [],
       };
       statePatch.phase = "intake";
+    }
+
+    // If we have no answers yet and no questions generated, ask for them
+    if (!state.answers && !state.questions?.length) {
+      return {
+        statePatch: { phase: "questionnaire" },
+        intents: [{ type: "ask-questions", topic: state.goal.title }]
+      };
     }
 
     if (!this.llm) {

@@ -32,7 +32,7 @@ export interface TeachingContent {
   explanation: string;
   firstPrinciples: string[];
   media?: Array<{
-    kind: "svg" | "diagram" | "markdown" | "code";
+    kind: "svg" | "diagram" | "markdown" | "code" | "mermaid";
     title?: string;
     content: string;
     language?: string;

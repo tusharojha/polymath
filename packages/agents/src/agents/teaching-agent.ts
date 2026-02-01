@@ -6,24 +6,31 @@ Your goal is to provide a deep, professional, and world-class explanation of a c
 
 UNIT: {{unitTitle}}
 RATIONALE: {{unitRationale}}
+USER LEVEL: {{userLevel}}
+USER CONTEXT: {{userContext}}
 
 INSTRUCTIONS:
-1. Long-form Exposition: Provide a comprehensive markdown explanation. Start from irreducible primitives and build up to complex interactions. Be professional, clear, and authoritative.
-2. Inline Layout: You MUST interleave media and senses within the text. Use markers like \`::media:N::\` (where N is the 0-based index in the "media" array) or \`::sense:N::\` (where N is the 0-based index in the "senses" array) at the exact points where they should be rendered. 
-3. Systemic Depth: Show exactly how this concept functions as a fundamental "brick" in the specialist's wall.
-4. Integrated "Senses": Suggest specific visuals, infographics, experiments, or research citations to ground the theory.
-5. Rich Media: Include 1-2 SVG or diagram blocks when helpful. Prefer to include at least one SVG or diagram if possible.
-6. Interjections are handled by a separate sub-agent. Return an empty array for "interjections".
+1. Long-form Exposition: Provide a comprehensive markdown explanation. Start from irreducible primitives and build up to complex interactions.
+   - If USER LEVEL is "beginner", keep explanations concrete and avoid jargon.
+   - If USER LEVEL is "intermediate", add formal terms with brief definitions.
+   - If USER LEVEL is "advanced", emphasize nuances, edge cases, and trade-offs.
+2. Integrated "Senses": Suggest specific visuals, infographics, experiments, or research citations to ground the theory.
+3. RICH CONTENT:
+    - **Tables**: Use markdown tables for comparisons or structured data.
+    - **Math (KaTeX)**: Use standard LaTeX notation for equations (e.g. $E=mc^2$ or $$H = \sum p_i \log p_i$$).
+    - **Mermaid Diagrams**: Use valid Mermaid.js syntax for mind maps, flowcharts, or architecture. Indicate with kind: "mermaid".
+4. Inline Layout: You MUST interleave media and senses within the text. Use markers like \`::media:N::\` or \`::sense:N::\`.
+5. Rich Media: Include at least 1-2 professional diagrams (SVG or Mermaid).
 
 Return STRICT JSON format:
 {
-  "explanation": "Markdown text with ::media:0:: or ::sense:0:: markers interleaved between paragraphs.",
+  "explanation": "Markdown text (with tables/math) and ::media:0:: markers.",
   "firstPrinciples": ["primitive 1", "primitive 2"],
   "media": [
-    { "kind": "svg" | "diagram" | "markdown" | "code", "title": "Optional title", "content": "SVG or markdown or code", "language": "js|ts|python|none" }
+    { "kind": "svg" | "mermaid" | "markdown" | "code", "title": "Optional title", "content": "The actual SVG code or Mermaid code or markdown", "language": "js|ts|python|none" }
   ],
   "senses": [
-    { "type": "visual" | "sound" | "infographic" | "experiment", "prompt": "precise description for the orchestrator", "reasoning": "educational value" }
+    { "type": "visual" | "sound" | "infographic" | "experiment", "prompt": "precise description", "reasoning": "educational value" }
   ],
   "interjections": []
 }
@@ -80,9 +87,16 @@ export class TeachingAgent implements Agent {
     if (!unit) return null;
     unitId = unit.id;
 
+    const userLevel =
+      (state.answers?.experienceLevel || state.answers?.backgroundLevel || "").toString().toLowerCase() ||
+      (state.knowledgeLevel >= 4 ? "advanced" : state.knowledgeLevel >= 2 ? "intermediate" : "beginner");
+    const userContext = JSON.stringify(state.answers ?? {});
+
     const prompt = TEACHING_PROMPT
       .replace("{{unitTitle}}", unit.title)
-      .replace("{{unitRationale}}", (unit as any).objective || "Foundational concept");
+      .replace("{{unitRationale}}", (unit as any).objective || "Foundational concept")
+      .replace("{{userLevel}}", userLevel)
+      .replace("{{userContext}}", userContext);
 
     try {
       const response = await this.llm.generate(prompt);
@@ -93,7 +107,7 @@ export class TeachingAgent implements Agent {
       const teachingContent: TeachingContent = {
         unitId,
         title: unit.title,
-        explanation: parsed.explanation,
+        explanation: parsed.explanation || parsed.summary || "Generating lesson content...",
         firstPrinciples: parsed.firstPrinciples ?? [],
         media: Array.isArray(parsed.media) ? parsed.media : [],
         senses: parsed.senses ?? [],
