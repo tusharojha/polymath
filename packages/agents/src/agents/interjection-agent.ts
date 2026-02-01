@@ -13,15 +13,15 @@ UNIT: {{unitTitle}}
 OBJECTIVE: {{unitObjective}}
 SUMMARY: {{summary}}
 
-Return STRICT JSON:
+Return STRICT JSON format:
 { "interjections": [ { "question": "insight title (declarative)", "answer": "clear explanation", "motivation": "why this matters" } ] }`;
 
 export class InterjectionAgent implements Agent {
   id = "interjection-agent";
   role = "teaching" as const;
-  priority = 86;
+  priority = 65;
 
-  constructor(private readonly llm: LLMClient) {}
+  constructor(private readonly llm: LLMClient) { }
 
   async observe(input: AgentInput): Promise<AgentUpdate | null> {
     const { state } = input;

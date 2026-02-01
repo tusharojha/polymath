@@ -9,15 +9,15 @@ RATIONALE: {{unitRationale}}
 
 INSTRUCTIONS:
 1. Long-form Exposition: Provide a comprehensive markdown explanation. Start from irreducible primitives and build up to complex interactions. Be professional, clear, and authoritative.
-2. Systemic Depth: Show exactly how this concept functions as a fundamental "brick" in the specialist's wall.
-3. Curiosity & Storytelling: Frame the knowledge in a way that makes the user want to know more. Use analogies that stick.
-4. Integrated "Senses": Suggest specific visuals, infographics, experiments, or research citations to ground the theory. Use "infographic" specifically for complex systemic mappings or visual summaries that need high-fidelity AI generation.
-5. Rich Media: Include 1-2 SVG or diagram blocks when helpful. These should be concise and readable. Prefer to include at least one SVG or diagram if possible.
+2. Inline Layout: You MUST interleave media and senses within the text. Use markers like \`::media:N::\` (where N is the 0-based index in the "media" array) or \`::sense:N::\` (where N is the 0-based index in the "senses" array) at the exact points where they should be rendered. 
+3. Systemic Depth: Show exactly how this concept functions as a fundamental "brick" in the specialist's wall.
+4. Integrated "Senses": Suggest specific visuals, infographics, experiments, or research citations to ground the theory.
+5. Rich Media: Include 1-2 SVG or diagram blocks when helpful. Prefer to include at least one SVG or diagram if possible.
 6. Interjections are handled by a separate sub-agent. Return an empty array for "interjections".
 
-Return STRICT JSON:
+Return STRICT JSON format:
 {
-  "explanation": "Deep markdown explanation starting with primitives",
+  "explanation": "Markdown text with ::media:0:: or ::sense:0:: markers interleaved between paragraphs.",
   "firstPrinciples": ["primitive 1", "primitive 2"],
   "media": [
     { "kind": "svg" | "diagram" | "markdown" | "code", "title": "Optional title", "content": "SVG or markdown or code", "language": "js|ts|python|none" }
@@ -32,7 +32,7 @@ Return STRICT JSON:
 export class TeachingAgent implements Agent {
   id = "teaching-agent";
   role = "teaching" as const;
-  priority = 90;
+  priority = 70;
 
   constructor(private readonly llm: LLMClient) { }
 

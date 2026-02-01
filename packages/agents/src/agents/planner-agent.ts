@@ -26,7 +26,7 @@ Do NOT get stuck in a questionnaire loop.
 
 Analyze the Thesis (direct signals: words/clicks; indirect: attention/time) and decide the next move to maximize the Polymath Values.
 
-Return STRICT JSON:
+Return STRICT JSON format:
 { 
   "decision": "ask-questions" | "draft-curriculum" | "orchestrate-sense" | "none", 
   "sense": string (if decision is orchestrate-sense),
@@ -41,7 +41,15 @@ export class PlannerAgent implements Agent {
   constructor(private readonly llm?: LLMClient) { }
 
   async observe(input: AgentInput): Promise<AgentUpdate | null> {
-    const { state, now } = input;
+    const { state, now, newSignals } = input;
+
+    // Selective Bypass: If the signal is purely navigational, skip planning
+    const isNavigational = newSignals.some(s =>
+      s.payload?.kind === "ui-intent" && (s.payload?.action === "open-unit" || s.payload?.action === "none")
+    );
+    if (isNavigational && state.phase === "learning") {
+      return null;
+    }
 
     // 1. Ensure thesis graph exists
     const statePatch: any = {};

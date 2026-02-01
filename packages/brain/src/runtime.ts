@@ -13,6 +13,7 @@ import {
   RevisionDepthAgent,
   SynthesisAgent,
   TeachingAgent,
+  LabsAgent,
   InterjectionAgent,
   UIBuilderAgent,
 } from "@polymath/agents";
@@ -88,6 +89,7 @@ export class BrainRuntime {
         new RevisionDepthAgent(),
         new SynthesisAgent(),
         new TeachingAgent(llm),
+        new LabsAgent(llm),
         new InterjectionAgent(llm),
         new UIBuilderAgent(llm),
       ],
@@ -96,6 +98,7 @@ export class BrainRuntime {
   }
 
   private onStatusChange?: ((status: "thinking" | "idle") => void) | null;
+  private onUpdateListener?: ((state: any) => void) | null;
 
   async ingest(signals: EvidenceSignal[]): Promise<BrainSessionResult> {
     if (!this.runtime) {
@@ -125,7 +128,7 @@ export class BrainRuntime {
       });
       let result = await this.runtime.ingest(mappedSignals);
 
-      // Pass 2: If we have sense intents, run them and re-ingest their outputs
+      // Pass 2: If we have sense intents, run them
       const senseIntents = result.intents.filter((i: any) => i.type === "present-sense");
       if (senseIntents.length > 0) {
         const senseOutputs = await runSenses(senseIntents, result.shared, this.llm);
@@ -139,7 +142,6 @@ export class BrainRuntime {
           payload: { kind: "sense-output", output: out },
         }));
 
-        // Secondary pass to let UI-Builder react to these senses
         result = await this.runtime.ingest(newSignals);
       }
 
@@ -156,5 +158,9 @@ export class BrainRuntime {
 
   setStatusListener(listener: (status: "thinking" | "idle") => void) {
     this.onStatusChange = listener;
+  }
+
+  onUpdate(listener: (state: any) => void) {
+    this.onUpdateListener = listener;
   }
 }

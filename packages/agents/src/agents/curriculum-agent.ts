@@ -156,7 +156,7 @@ STRUCTURE:
 - Each module must represent a clear phase in the 0-100 journey.
 
 SCHEMA:
-Return STRICT JSON:
+Return STRICT JSON format:
 {
   "summary": "High-level vision of the journey",
   "story": "A compelling narrative of how the user will evolve",
@@ -198,7 +198,7 @@ If Research Notes are provided, ground every module in the specific papers, trad
 export class CurriculumAgent implements Agent {
   id = "curriculum-agent";
   role = "curriculum" as const;
-  priority = 75;
+  priority = 85;
   private readonly llm: LLMClient;
   private readonly research?: (topic: string) => Promise<ResearchResult>;
 

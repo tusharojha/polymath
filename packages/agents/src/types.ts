@@ -23,6 +23,7 @@ export type AgentRole =
   | "revision-depth"
   | "synthesis"
   | "teaching"
+  | "labs"
   | "ui-builder";
 
 export interface TeachingContent {
@@ -83,6 +84,7 @@ export interface SharedUnderstandingState {
   curriculum?: CurriculumPlan;
   curriculumProgress?: Record<ID, "not_started" | "in_progress" | "done">;
   curriculumLocked?: boolean;
+  unitStates?: Record<ID, any>; // Persistent form/local state for units
   knowledgeRepository?: Record<ID, TeachingContent>; // Persisted explanations
   activeStep?: LearningStep;
   pendingUnitId?: ID | null;
@@ -129,19 +131,19 @@ export interface Agent {
 
 export type AgentIntent =
   | {
-      type: "draft-curriculum";
-      topic: string;
-      knowledgeLevel: KnowledgeLevel;
-    }
+    type: "draft-curriculum";
+    topic: string;
+    knowledgeLevel: KnowledgeLevel;
+  }
   | {
-      type: "amend-curriculum";
-      topic: string;
-      request: string;
-    }
+    type: "amend-curriculum";
+    topic: string;
+    request: string;
+  }
   | {
-      type: "ask-questions";
-      topic: string;
-    }
+    type: "ask-questions";
+    topic: string;
+  }
   | {
     type: "begin-teaching";
     moduleId?: ID;

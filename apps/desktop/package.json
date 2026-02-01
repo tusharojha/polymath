@@ -1,6 +1,9 @@
 {
   "name": "@polymath/desktop",
   "private": true,
+  "version": "0.1.0",
+  "description": "Polymath desktop app",
+  "author": "Polymath",
   "type": "module",
   "main": "./out/main/main.js",
   "scripts": {

@@ -39,6 +39,7 @@ export class UnderstandingAgent implements Agent {
     const valueVector = { ...(input.state.valueVector || { curiosity: 0.5, depth: 0.5, practice: 0.5, revision: 0.5, collaboration: 0.5 }) };
 
     let currentAnswers = { ...input.state.answers };
+    let unitStates = { ...input.state.unitStates };
     let userPurpose = input.state.userPurpose;
     let knowledgeLevel = input.state.knowledgeLevel;
 
@@ -61,6 +62,13 @@ export class UnderstandingAgent implements Agent {
             if (n.id === goalConceptId) n.confidence = Math.min(1, n.confidence + 0.3);
           });
         }
+      }
+
+      // Handle unit-specific state preservation
+      const unitState = payload?.data?.unitState || payload?.unitState;
+      const unitId = payload?.data?.unitId || payload?.unitId || input.state.activeStep?.unitId;
+      if (unitState && unitId) {
+        unitStates = { ...unitStates, [unitId]: unitState };
       }
 
       if (kind === "answers") {
@@ -148,6 +156,7 @@ export class UnderstandingAgent implements Agent {
           edges,
         },
         valueVector,
+        unitStates,
       },
       notes: ["Polymath understanding middleware synchronized state and confidence."],
     };

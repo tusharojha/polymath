@@ -23,7 +23,7 @@ Any interactive element must include props.action and props.meaning for the brai
 export class LearningStepBuilderAgent implements Agent {
   id = "learning-step-builder-agent";
   role = "learning-step-builder" as const;
-  priority = 70;
+  priority = 80;
   private readonly llm?: LLMClient;
 
   constructor(llm?: LLMClient) {
@@ -123,10 +123,7 @@ export class LearningStepBuilderAgent implements Agent {
           title: stepTitle,
           rationale: targetUnit?.objective ?? "Start from first principles.",
           senses: ["visual", "infographic", "experiment"],
-          prompts: [
-            "Explain the core primitives in your own words.",
-            "Sketch a quick map of how they relate.",
-          ],
+          prompts: [],
           unitId: targetUnit?.id,
           layout,
         },

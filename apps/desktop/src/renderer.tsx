@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect } from "react";
+import React, { useMemo, useState, useEffect, useRef } from "react";
 import { createRoot } from "react-dom/client";
 import { motion, AnimatePresence } from "framer-motion";
 import "./index.css"; // Tailwind imports
@@ -420,13 +420,23 @@ function Workspace({ state, bridge, setAnswers, answers, senseArtifacts, isThink
   const surface = state?.shared?.learningSurface;
   const components = surface?.components;
   const [localState, setLocalState] = useState<Record<string, any>>({});
+  const lastUnitId = useRef<string | null>(null);
 
   // Initialize local state when surface changes
   React.useEffect(() => {
-    if (surface?.state) {
-      setLocalState(surface.state);
+    const currentUnitId = state?.shared?.activeStep?.unitId;
+
+    if (currentUnitId !== lastUnitId.current) {
+      // Unit changed: Reset local state or load from repository if available
+      // Note: We might want to persist the old state here, but handleIntent already sends it
+      const savedState = state?.shared?.unitStates?.[currentUnitId || ""] ?? surface?.state ?? {};
+      setLocalState(savedState);
+      lastUnitId.current = currentUnitId;
+    } else if (surface?.state) {
+      // Same unit, partial update: preserve user edits if they exist
+      setLocalState(prev => ({ ...surface.state, ...prev }));
     }
-  }, [surface]);
+  }, [surface, state?.shared?.activeStep?.unitId]);
 
   const curriculum = state?.shared?.curriculum;
   const progress = state?.shared?.curriculumProgress ?? {};
@@ -437,6 +447,13 @@ function Workspace({ state, bridge, setAnswers, answers, senseArtifacts, isThink
     if (!bridge) return;
     if (buttonKey) {
       setDisabledButtons((prev) => ({ ...prev, [buttonKey]: true }));
+    }
+
+    // Sync state back to brain for preservation
+    const currentUnitId = state?.shared?.activeStep?.unitId;
+    const updatedExtraData = { ...extraData };
+    if (currentUnitId) {
+      updatedExtraData.unitState = currentState;
     }
 
     await bridge.signal({
@@ -452,7 +469,7 @@ function Workspace({ state, bridge, setAnswers, answers, senseArtifacts, isThink
           meaning: reasoning,
           formState: currentState,
           surface: surface, // Pass the full surface context (questions, metadata)
-          ...extraData
+          ...updatedExtraData
         }
       },
     });
@@ -462,7 +479,7 @@ function Workspace({ state, bridge, setAnswers, answers, senseArtifacts, isThink
     if (!isThinking) {
       setDisabledButtons({});
     }
-  }, [isThinking]);
+  }, [isThinking, state]); // Add state to trigger if update arrives after thinking
 
   const toggleNode = (id: string) => {
     setExpandedNodes((prev) => ({ ...prev, [id]: !prev[id] }));
@@ -607,7 +624,7 @@ function Workspace({ state, bridge, setAnswers, answers, senseArtifacts, isThink
                       return (
                         <div
                           key={unit.id || uIdx}
-                          onClick={() => handleIntent(`Open unit: ${unit.title}`, state?.shared, "open-unit", { unitId: unit.id })}
+                          onClick={() => handleIntent(`Open unit: ${unit.title}`, state?.shared, "open-unit", undefined, { unitId: unit.id })}
                           className={`p-2 rounded-md cursor-pointer text-xs transition-all hover:bg-accent/5 ${isActive ? "text-accent font-bold bg-accent/10" : "text-fgMuted font-medium"}`}
                         >
                           <div className="flex items-center gap-2">

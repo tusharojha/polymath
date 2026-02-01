@@ -15,5 +15,6 @@ export * from "./agents/learning-step-builder-agent";
 export * from "./agents/revision-depth-agent";
 export * from "./agents/synthesis-agent";
 export * from "./agents/teaching-agent";
+export * from "./agents/labs-agent";
 export * from "./agents/interjection-agent";
 export * from "./agents/ui-builder-agent";

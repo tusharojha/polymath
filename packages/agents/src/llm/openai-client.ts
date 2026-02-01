@@ -15,10 +15,14 @@ export class OpenAIResponsesClient implements LLMClient {
 
   async generate(prompt: string): Promise<string> {
     try {
+      const isJson = prompt.toLowerCase().includes("json");
       const response = await this.openai.chat.completions.create({
         model: this.model,
-        messages: [{ role: "user", content: prompt }],
-        response_format: { type: "json_object" },
+        messages: [
+          { role: "system", content: "You are a helpful assistant. If you are asked to return JSON, ensure your response is a valid JSON object." },
+          { role: "user", content: prompt }
+        ],
+        ...(isJson ? { response_format: { type: "json_object" } } : {}),
       });
 
       return response.choices[0]?.message?.content ?? "";
@@ -38,9 +42,10 @@ export class OpenAIResponsesClient implements LLMClient {
       });
 
       return response.data?.[0]?.url ?? "";
-    } catch (error) {
+    } catch (error: any) {
       console.error("OpenAI image generation error:", error);
-      throw error;
+      // Return empty string if rate limited or other error, so the UI can handle it gracefully
+      return "";
     }
   }
 }

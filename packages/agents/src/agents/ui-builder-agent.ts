@@ -96,6 +96,7 @@ DESIGN RULES:
 10. SELECT OPTIONS: For "Select" components, always pass the options in the "options" prop as an array of objects: { "value": "ID", "label": "Text" }.
 11. STYLING: Always use the "input" className for "Input" and "Select" components to ensure consistent design.
 12. STATE BINDING: The "name" prop is what binds the value to the parent "state" object. Use descriptive keys (e.g. "userExperience", "projectGoal").
+13. EXPOSITION FIRST: In the "learning" phase, always render the "teachingContent.explanation" as the hero element. Do not include assessment inputs (from activeStep.prompts) on the first render of a unit; focus on teaching.
 
 CURRENT DATA:
 ${JSON.stringify({
@@ -105,7 +106,7 @@ ${JSON.stringify({
       senseOutputs: (state.recentSignals ?? []).filter((s: any) => s.payload?.kind === "sense-output").map((s: any) => s.payload.output)
     }, null, 2)}
 
-Return ONLY valid JSON.
+Return ONLY valid json format.
 `;
 
     const response = await this.llm.generate(prompt);
@@ -202,80 +203,117 @@ Return ONLY valid JSON.
     const teachingContent = unitId ? state.knowledgeRepository?.[unitId] : null;
 
     const title = teachingContent?.title ?? step?.title ?? state.goal?.title ?? "Learning";
-    const explanation = teachingContent?.explanation ?? step?.rationale ?? "Loading content...";
-    const mediaBlocks = (teachingContent?.media || []).map((item: any, idx: number) => {
-      const title = item.title ? {
+    const rawExplanation = teachingContent?.explanation ?? step?.rationale ?? "Loading content...";
+
+    // Resolve Media Components
+    const mediaComponents = (teachingContent?.media || []).map((item: any, idx: number) => {
+      const titleComp = item.title ? {
         type: "component",
         componentName: "Text",
         props: { children: item.title, className: "text-xs uppercase tracking-widest text-fgSubtle" }
       } : null;
 
-      if (item.kind === "svg" || item.kind === "diagram") {
-        return {
-          type: "flex",
-          flexBoxProperties: { className: "flex-col gap-3 p-4 rounded-xl border border-border bg-surface" },
-          contents: [
-            ...(title ? [title] : []),
-            { type: "component", componentName: "SvgBlock", props: { svg: item.content } }
-          ]
-        };
-      }
-
-      if (item.kind === "code") {
-        return {
-          type: "flex",
-          flexBoxProperties: { className: "flex-col gap-3 p-4 rounded-xl border border-border bg-surface" },
-          contents: [
-            ...(title ? [title] : []),
-            { type: "component", componentName: "CodeBlock", props: { code: item.content, language: item.language } }
-          ]
-        };
-      }
-
-      return {
+      const baseFlex = {
         type: "flex",
-        flexBoxProperties: { className: "flex-col gap-3 p-4 rounded-xl border border-border bg-surface" },
-        contents: [
-          ...(title ? [title] : []),
-          { type: "component", componentName: "Text", props: { children: item.content, className: "text-sm text-fgMuted" } }
-        ]
+        flexBoxProperties: { className: "flex-col gap-3 p-4 rounded-xl border border-border bg-surface my-4" },
       };
+
+      if (item.kind === "svg" || item.kind === "diagram") {
+        return { ...baseFlex, contents: [...(titleComp ? [titleComp] : []), { type: "component", componentName: "SvgBlock", props: { svg: item.content } }] };
+      }
+      if (item.kind === "code") {
+        return { ...baseFlex, contents: [...(titleComp ? [titleComp] : []), { type: "component", componentName: "CodeBlock", props: { code: item.content, language: item.language } }] };
+      }
+      return { ...baseFlex, contents: [...(titleComp ? [titleComp] : []), { type: "component", componentName: "Text", props: { children: item.content, className: "text-sm text-fgMuted" } }] };
     });
 
-    // Create artifacts section
-    const artifacts = (state.recentSignals || [])
-      .filter((s: any) => s.payload?.kind === "sense-output")
-      .flatMap((s: any) => s.payload.output.artifacts || [])
-      .map((art: any) => {
-        if (art.kind === "experiment" && art.code) {
-          return {
-            type: "component",
-            componentName: "ExperimentViewer",
-            props: { code: art.code }
-          };
-        }
-        if (art.kind === "infographic" && art.url) {
-          return {
-            type: "flex",
-            flexBoxProperties: { className: "flex-col gap-3 p-4 rounded-xl border border-border bg-surface my-4" },
-            contents: [
-              { type: "component", componentName: "Text", props: { children: art.title || "Infographic", className: "text-xs uppercase tracking-widest text-fgSubtle" } },
-              {
-                type: "component", componentName: "Box", props: { className: "aspect-square w-full rounded-lg overflow-hidden border border-border bg-black" }, contents: [
-                  { type: "component", componentName: "Image", props: { src: art.url, alt: art.description, className: "w-full h-full object-cover" } }
-                ]
-              }
-            ]
-          };
-        }
-        return {
+    // Resolve Sense/Artifact Components
+    const artifactMap = new Map<string, any>();
+
+    // Check state.artifacts first (from LabsAgent)
+    (state.artifacts || []).forEach((art: any) => {
+      if (art.kind === "experiment") {
+        artifactMap.set(`experiment-${art.unitId}`, {
           type: "component",
-          componentName: "Box",
-          props: { className: "p-4 bg-surface rounded-lg border border-border mb-4 card", children: art.description }
-        };
+          componentName: "ExperimentViewer",
+          props: { code: art.code }
+        });
+      }
+    });
+
+    // Then check sense-outputs from signals
+    (state.recentSignals || [])
+      .filter((s: any) => s.payload?.kind === "sense-output")
+      .forEach((s: any) => {
+        (s.payload.output.artifacts || []).forEach((art: any) => {
+          if (art.kind === "infographic" && art.url) {
+            artifactMap.set("infographic", {
+              type: "flex",
+              flexBoxProperties: { className: "flex-col gap-3 p-4 rounded-xl border border-border bg-surface my-4 max-w-[500px] mx-auto w-full" },
+              contents: [
+                { type: "component", componentName: "Text", props: { children: art.title || "Infographic", className: "text-xs uppercase tracking-widest text-fgSubtle" } },
+                {
+                  type: "component", componentName: "Box", props: { className: "aspect-square w-full rounded-lg overflow-hidden border border-border bg-black" }, contents: [
+                    { type: "component", componentName: "Image", props: { src: art.url, alt: art.description, className: "w-full h-full object-cover" } }
+                  ]
+                }
+              ]
+            });
+          }
+        });
       });
 
-    // Create interjections section
+    // INTERLEAVING LOGIC
+    const contents: any[] = [];
+    const markerRegex = /::(media|sense):(\d+)::/g;
+    let lastIndex = 0;
+    let match;
+
+    while ((match = markerRegex.exec(rawExplanation)) !== null) {
+      // Add text before marker
+      const textBefore = rawExplanation.substring(lastIndex, match.index).trim();
+      if (textBefore) {
+        contents.push({ type: "component", componentName: "Text", props: { children: textBefore, className: "text-lg text-fgMuted leading-relaxed markdown-content" } });
+      }
+
+      const type = match[1];
+      const index = parseInt(match[2], 10);
+
+      if (type === "media" && mediaComponents[index]) {
+        contents.push(mediaComponents[index]);
+      } else if (type === "sense") {
+        const senseTarget = teachingContent?.senses?.[index];
+        if (senseTarget) {
+          // Find matching artifact
+          let component = null;
+          if (senseTarget.type === "experiment") component = artifactMap.get(`experiment-${unitId}`);
+          else if (senseTarget.type === "infographic") component = artifactMap.get("infographic");
+
+          if (component) {
+            contents.push(component);
+          } else {
+            contents.push({ type: "component", componentName: "Text", props: { children: `Sense active: Generating ${senseTarget.type}...`, className: "italic text-fgSubtle my-4" } });
+          }
+        }
+      }
+      lastIndex = markerRegex.lastIndex;
+    }
+
+    // Add remaining text
+    const remainingText = rawExplanation.substring(lastIndex).trim();
+    if (remainingText) {
+      contents.push({ type: "component", componentName: "Text", props: { children: remainingText, className: "text-lg text-fgMuted leading-relaxed markdown-content" } });
+    }
+
+    // Fallback: If no markers were found, just render everything sequentially as before
+    if (contents.length === 0 && rawExplanation) {
+      contents.push({ type: "component", componentName: "Text", props: { children: rawExplanation, className: "text-lg text-fgMuted leading-relaxed markdown-content" } });
+      contents.push(...mediaComponents);
+      // Add artifacts that weren't interleaved
+      artifactMap.forEach(v => contents.push(v));
+    }
+
+    // Interjections
     const interjections = (teachingContent?.interjections || []).map((ij: any) => ({
       type: "flex",
       flexBoxProperties: { className: "p-6 bg-accent/5 rounded-xl border border-accent/20 my-6 flex-col gap-3" },
@@ -291,29 +329,15 @@ Return ONLY valid JSON.
         purposeOfThisRender: "Present first-principles lesson",
         predictedNextAction: "User will follow the logic or explore senses"
       },
-      state: {},
+      state: state.unitStates?.[unitId || ""] ?? {},
       components: [
         {
           type: "flex",
           flexBoxProperties: { className: "flex-col gap-6 p-8" },
           contents: [
             { type: "component", componentName: "Heading", props: { children: title, className: "text-3xl font-bold text-fg tracking-tight" } },
-            { type: "component", componentName: "Text", props: { children: explanation, className: "text-lg text-fgMuted leading-relaxed markdown-content" } },
+            ...contents,
             ...interjections,
-            ...(mediaBlocks.length ? [
-              {
-                type: "flex",
-                flexBoxProperties: { className: "flex-col gap-4 mt-4" },
-                contents: mediaBlocks
-              }
-            ] : []),
-            {
-              type: "flex",
-              flexBoxProperties: { className: "flex-col gap-4 mt-6" },
-              contents: artifacts.length ? artifacts : [
-                { type: "component", componentName: "Text", props: { children: "Senses active: Gathering visuals and data...", className: "italic text-fgSubtle" } }
-              ]
-            },
             {
               type: "flex",
               flexBoxProperties: { className: "flex-row gap-4 mt-8" },

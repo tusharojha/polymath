@@ -3,7 +3,7 @@ import type { LLMClient } from "../llm/types";
 
 const QUESTION_PROMPT = `You are the Polymath Question Agent.
 Create 4 short questions to assess the user's background on the topic.
-Return STRICT JSON:
+Return STRICT JSON format:
 {
   "questions": [
     { "id": "q1", "prompt": "string", "kind": "text" | "choice", "choices": ["a","b"] }
@@ -22,7 +22,7 @@ function fallbackQuestions(topic: string) {
 export class QuestionAgent implements Agent {
   id = "question-agent";
   role = "planner" as const;
-  priority = 80;
+  priority = 85;
   private llm: LLMClient;
 
   constructor(llm: LLMClient) {

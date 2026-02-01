@@ -97,24 +97,25 @@ function makeAgentNode(agent: Agent) {
 export class LangGraphAgentRuntime {
   private readonly graph;
   private readonly agents: Agent[];
-  private shared: SharedUnderstandingState;
+  public shared: SharedUnderstandingState;
 
   constructor(params: { agents: Agent[]; initialState: SharedUnderstandingState }) {
     this.agents = params.agents;
     this.shared = params.initialState;
 
     let builder = new StateGraph(AgentState);
-    const nodeIds = this.agents.map((agent, index) => `agent-${index}-${agent.id}`);
-    nodeIds.forEach((nodeId, index) => {
-      builder = builder.addNode(nodeId as any, makeAgentNode(this.agents[index]));
+
+    // Add all nodes sequentially
+    this.agents.forEach((agent) => {
+      builder = builder.addNode(`agent-${agent.id}` as any, makeAgentNode(agent));
     });
 
-    if (nodeIds.length > 0) {
-      builder = builder.addEdge(START, nodeIds[0] as any);
-      for (let i = 1; i < nodeIds.length; i += 1) {
-        builder = builder.addEdge(nodeIds[i - 1] as any, nodeIds[i] as any);
+    if (this.agents.length > 0) {
+      builder = builder.addEdge(START, `agent-${this.agents[0].id}` as any);
+      for (let i = 1; i < this.agents.length; i += 1) {
+        builder = builder.addEdge(`agent-${this.agents[i - 1].id}` as any, `agent-${this.agents[i].id}` as any);
       }
-      builder = builder.addEdge(nodeIds[nodeIds.length - 1] as any, END);
+      builder = builder.addEdge(`agent-${this.agents[this.agents.length - 1].id}` as any, END);
     }
 
     this.graph = builder.compile();
@@ -140,5 +141,38 @@ export class LangGraphAgentRuntime {
       notes: result.notes,
       shared: result.shared,
     };
+  }
+
+  async *streamIngest(signals: EvidenceSignal[]) {
+    const now = Date.now();
+    const shared = {
+      ...this.shared,
+      recentSignals: [...signals, ...this.shared.recentSignals].slice(0, 200),
+      lastUpdatedAt: now,
+    };
+
+    const stream = await this.graph.stream({
+      shared,
+      newSignals: signals,
+      intents: [],
+      notes: [],
+    });
+
+    for await (const update of stream) {
+      // update is a dictionary where keys are node names and values are their outputs
+      const entries = Object.entries(update);
+      if (entries.length > 0) {
+        const [nodeName, output] = entries[0] as [string, any];
+        if (output.shared) {
+          this.shared = output.shared;
+          yield {
+            node: nodeName,
+            shared: this.shared,
+            notes: output.notes ?? [],
+            intents: output.intents ?? []
+          };
+        }
+      }
+    }
   }
 }

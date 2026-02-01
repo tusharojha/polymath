@@ -6,10 +6,19 @@ export class SenseOrchestratorAgent implements Agent {
   priority = 85;
 
   async observe(input: AgentInput): Promise<AgentUpdate | null> {
-    const thesis = input.state.thesis;
-    const step = input.state.activeStep;
-    const graph = input.state.thesisGraph;
-    if (input.state.phase && input.state.phase !== "learning" && input.state.phase !== "intake") {
+    const { state, newSignals } = input;
+    const thesis = state.thesis;
+    const step = state.activeStep;
+    const graph = state.thesisGraph;
+
+    // Selective Bypass: If purely navigational or unit already has content, skip
+    const isNavigational = newSignals.some(s => s.payload?.kind === "ui-intent" && s.payload?.action === "open-unit");
+    const hasContent = step?.unitId && state.knowledgeRepository?.[step.unitId];
+    if (isNavigational && hasContent) {
+      return null;
+    }
+
+    if (state.phase && state.phase !== "learning" && state.phase !== "intake") {
       return null;
     }
     if (!thesis) {
