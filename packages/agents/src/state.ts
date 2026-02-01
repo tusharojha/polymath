@@ -40,6 +40,7 @@ export class InMemoryUnderstandingState {
       recentSignals: [],
       pendingIntents: [],
       artifacts: [],
+      knowledgeRepository: {},
       lastUpdatedAt: params.now,
     };
   }

@@ -365,7 +365,7 @@ function Workspace({ state, bridge, setAnswers, answers, senseArtifacts, isThink
   const curriculum = state?.shared?.curriculum;
   const progress = state?.shared?.curriculumProgress ?? {};
 
-  const handleIntent = async (reasoning: string, currentState: any, action: string = "sdui-interaction") => {
+  const handleIntent = async (reasoning: string, currentState: any, action: string = "sdui-interaction", extraData: any = {}) => {
     if (!bridge) return;
 
     await bridge.signal({
@@ -380,7 +380,8 @@ function Workspace({ state, bridge, setAnswers, answers, senseArtifacts, isThink
         data: {
           meaning: reasoning,
           formState: currentState,
-          surface: surface // Pass the full surface context (questions, metadata)
+          surface: surface, // Pass the full surface context (questions, metadata)
+          ...extraData
         }
       },
     });
@@ -497,29 +498,37 @@ function Workspace({ state, bridge, setAnswers, answers, senseArtifacts, isThink
             </div>
           ) : curriculum?.modules && curriculum.modules.length > 0 ? (
             <div className="flex flex-col gap-3">
-              {curriculum.modules.map((module: any, idx: number) => (
-                <div
-                  key={module.id || idx}
-                  className={`p-4 rounded-lg cursor-pointer transition-all duration-200 border hover:border-accent hover:translate-x-1 ${module.active ? "bg-accentSoft border-accent" : "bg-transparent border-transparent"}`}
-                >
-                  <div className="flex flex-row gap-3">
-                    <div
-                      className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 border-2 ${module.completed ? "bg-accent border-accent" : "bg-surface border-border"}`}
-                    >
-                      {module.completed && (
-                        <span className="text-xs text-white font-bold">✓</span>
-                      )}
+              {curriculum.modules.map((module: any, mIdx: number) => (
+                <div key={module.id || mIdx} className="flex flex-col gap-1">
+                  <div
+                    className={`p-3 rounded-lg cursor-pointer transition-all duration-200 border hover:border-accent/40 ${module.active ? "bg-accentSoft border-accent/20" : "bg-transparent border-transparent"}`}
+                  >
+                    <div className="flex flex-row gap-3 items-center">
+                      <div className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 border ${module.completed ? "bg-accent border-accent text-white" : "bg-surface border-border"}`}>
+                        {module.completed && <span className="text-[10px] font-bold">✓</span>}
+                      </div>
+                      <p className="text-sm font-semibold text-fg truncate">{module.title}</p>
                     </div>
-                    <div className="flex flex-col flex-1 gap-0">
-                      <p className="text-sm font-semibold text-fg">
-                        {module.title}
-                      </p>
-                      {module.description && (
-                        <p className="text-xs text-fgMuted line-clamp-2">
-                          {module.description}
-                        </p>
-                      )}
-                    </div>
+                  </div>
+
+                  {/* Units */}
+                  <div className="flex flex-col gap-1 ml-6 border-l border-border/50 pl-3">
+                    {module.units?.map((unit: any, uIdx: number) => {
+                      const isActive = state?.shared?.activeStep?.unitId === unit.id;
+                      const isCompleted = state?.shared?.curriculumProgress?.[unit.id] === "done";
+                      return (
+                        <div
+                          key={unit.id || uIdx}
+                          onClick={() => handleIntent(`Open unit: ${unit.title}`, state?.shared, "open-unit", { unitId: unit.id })}
+                          className={`p-2 rounded-md cursor-pointer text-xs transition-all hover:bg-accent/5 ${isActive ? "text-accent font-bold bg-accent/10" : "text-fgMuted font-medium"}`}
+                        >
+                          <div className="flex items-center gap-2">
+                            <div className={`w-1.5 h-1.5 rounded-full ${isActive ? "bg-accent" : isCompleted ? "bg-green-500" : "bg-border"}`} />
+                            {unit.title}
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               ))}

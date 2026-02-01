@@ -14,10 +14,15 @@ Your role is to orchestrate "Learning Steps" using "Senses":
 - Senses: sounds (music), infographics, animations, slides, visuals, characters, experiment designer, research papers, industry updates.
 
 Decisions:
-1. "ask-questions": If we need more context on user goals/background.
-2. "draft-curriculum": If we are ready to build the first-principles map.
-3. "orchestrate-sense": Trigger a specific sense (e.g. background music, infographic request) based on the "Understanding Thesis".
-4. "none": If waiting for other agents.
+1. "ask-questions": If we need more context on user goals/background. (Avoid if hasAnswers is true and thesisConfidence > 0.4).
+2. "draft-curriculum": If we are ready to build the first-principles map. (Prioritize if hasAnswers is true).
+3. "begin-teaching": If curriculum exists and we should start the first unit. (Prioritize immediately after draft-curriculum).
+4. "orchestrate-sense": Trigger a specific sense (e.g. background music, infographic request) based on the "Understanding Thesis".
+5. "none": If waiting for other agents.
+
+Transition Rule: If hasAnswers is true and hasQuestions is true, move to draft-curriculum unless the user explicitly requested more questions.
+If hasCurriculum is true and no activeStep is set, move to begin-teaching.
+Do NOT get stuck in a questionnaire loop.
 
 Analyze the Thesis (direct signals: words/clicks; indirect: attention/time) and decide the next move to maximize the Polymath Values.
 
@@ -59,12 +64,24 @@ export class PlannerAgent implements Agent {
 
     if (!this.llm) {
       // Fallback to legacy logic if no LLM
-      const intents: any[] = [];
-      if (!state.questions) intents.push({ type: "ask-questions", topic: state.goal.title });
-      if (!state.curriculum && state.answers) {
-        intents.push({ type: "draft-curriculum", topic: state.goal.title, knowledgeLevel: state.knowledgeLevel });
+      // 1. PHASE GUARD: If we have questions but no answers, we MUST stay in questionnaire.
+      if (state.questions?.length && (!state.answers || Object.keys(state.answers).length === 0)) {
+        return {
+          statePatch: { phase: "questionnaire" },
+          intents: [{ type: "ask-questions", topic: state.goal.title }]
+        };
       }
-      return { statePatch, intents };
+
+      // 2. CURRICULUM GUARD: If no curriculum and we have answers, draft it.
+      if (!state.curriculum && state.answers && Object.keys(state.answers).length > 0) {
+        const intents: any[] = [];
+        if (!state.pendingIntents.some(i => i.type === "draft-curriculum")) {
+          intents.push({ type: "draft-curriculum", topic: state.goal.title, knowledgeLevel: state.knowledgeLevel });
+        }
+        return { statePatch, intents };
+      }
+
+      return { statePatch, intents: [] };
     }
 
     try {
@@ -76,6 +93,7 @@ export class PlannerAgent implements Agent {
         hasAnswers: !!state.answers,
         hasCurriculum: !!state.curriculum,
         recentAnswers: state.answers,
+        valueVector: state.valueVector, // Curiosity, Depth, Practice, Revision, Collaboration
         phase: state.phase
       });
 
@@ -90,6 +108,17 @@ export class PlannerAgent implements Agent {
           type: "draft-curriculum",
           topic: state.goal.title,
           knowledgeLevel: state.knowledgeLevel,
+        });
+      } else if (parsed.decision === "begin-teaching") {
+        intents.push({
+          type: "begin-teaching",
+          unitId: state.curriculum?.modules?.[0]?.units?.[0]?.id
+        });
+      } else if (parsed.decision === "orchestrate-sense" && parsed.sense) {
+        intents.push({
+          type: "present-sense",
+          sense: parsed.sense,
+          prompt: parsed.reasoning
         });
       }
 

@@ -22,7 +22,25 @@ export type AgentRole =
   | "learning-step-builder"
   | "revision-depth"
   | "synthesis"
+  | "teaching"
   | "ui-builder";
+
+export interface TeachingContent {
+  unitId: ID;
+  title: string;
+  explanation: string;
+  firstPrinciples: string[];
+  senses: Array<{
+    type: SenseType;
+    prompt: string;
+    reasoning: string;
+  }>;
+  interjections: Array<{
+    question: string;
+    answer: string;
+    motivation: string;
+  }>;
+}
 
 export interface SharedUnderstandingState {
   userId: ID;
@@ -58,6 +76,7 @@ export interface SharedUnderstandingState {
   answers?: Record<ID, string>;
   curriculum?: CurriculumPlan;
   curriculumProgress?: Record<ID, "not_started" | "in_progress" | "done">;
+  knowledgeRepository?: Record<ID, TeachingContent>; // Persisted explanations
   activeStep?: LearningStep;
   pendingUnitId?: ID | null;
   learningSurface?: {

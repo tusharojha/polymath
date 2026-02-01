@@ -139,45 +139,61 @@ function treeFromModules(topic: string, modules: any[]) {
   };
 }
 
-const CURRICULUM_SYSTEM_PROMPT = `You are the Polymath Curriculum Agent.
-Build a first-principles curriculum from zero to mastery for the given topic.
-Return STRICT JSON matching this schema:
+const CURRICULUM_SYSTEM_PROMPT = `You are the Polymath Principal Curriculum Architect.
+Your task is to design a high-fidelity, specialist-level curriculum that takes a user from Zero (Foundations) to 100 (Domain Specialist/Innovator).
+
+CORE PHILOSOPHY:
+1. First-Principles: Start with irreducible concepts.
+2. Systemic Depth: Map every causal link and dependency.
+3. Specialist Trajectory: 
+   - 0-20: Foundations & Primitives
+   - 20-60: Systems & Interactions
+   - 60-90: Advanced Synthesis & Real-world constraints
+   - 90-100: Specialist Innovation & Frontier Challenges
+
+STRUCTURE:
+- Provide a deep tree-like hierarchy (at least 10-15 modules).
+- Each module must represent a clear phase in the 0-100 journey.
+
+SCHEMA:
+Return STRICT JSON:
 {
-  "summary": string,
-  "story": string,
+  "summary": "High-level vision of the journey",
+  "story": "A compelling narrative of how the user will evolve",
   "tree": {
     "id": "root",
-    "title": string,
-    "goal": string,
-    "keyLearnings": string[],
+    "title": "Main Goal",
+    "goal": "Specialist mastery description",
+    "keyLearnings": ["Mastery checkpoint 1", "Mastery checkpoint 2"],
     "children": [
       {
-        "id": "module-1",
-        "title": string,
-        "goal": string,
-        "keyLearnings": string[],
-        "children": [...]
+        "id": "mod-1",
+        "title": "Module Title",
+        "goal": "What is mastered here",
+        "keyLearnings": ["sub-skill 1", "sub-skill 2"],
+        "children": [
+          { "id": "unit-1-1", "title": "Unit Title", "goal": "Specific objective" }
+        ]
       }
     ]
   },
   "modules": [
     {
-      "title": string,
-      "rationale": string,
+      "title": "Matching Title from tree",
+      "rationale": "Why this specific knowledge is critical for a specialist",
       "units": [
         {
-          "title": string,
-          "objective": string,
-          "firstPrinciples": string[],
-          "checkpoints": string[]
+          "title": "Match title from tree",
+          "objective": "Zero-to-100 mission",
+          "firstPrinciples": ["The smallest irreducible unit", "Causal dependency", "What breaks if removed"],
+          "checkpoints": ["Specialist-level artifact to build", "Advanced verification method"]
         }
       ]
     }
   ]
 }
-Each unit must include: objective, first principles, integration steps,
-what breaks if removed, and practical checkpoints. Include integration steps
-and removal impact inside "firstPrinciples" text entries.`;
+
+If Research Notes are provided, ground every module in the specific papers, trade-offs, and advanced concepts found in the research.`;
 
 export class CurriculumAgent implements Agent {
   id = "curriculum-agent";
@@ -216,9 +232,21 @@ export class CurriculumAgent implements Agent {
 
     const research = this.research ? await this.research(input.state.goal.title) : null;
     const researchBlock = research
-      ? `\nResearch notes:\n${JSON.stringify(research).slice(0, 4000)}`
+      ? `\nRESEARCH INSIGHTS (Advanced Concepts/Trade-offs):\nNotes: ${research.notes}\nSources: ${JSON.stringify(research.sources).slice(0, 4000)}`
       : "";
-    const prompt = `${CURRICULUM_SYSTEM_PROMPT}\nTopic: ${input.state.goal.title}${researchBlock}`;
+
+    const answersBlock = input.state.answers
+      ? `\nUSER CONTEXT (Background/Goals):\n${JSON.stringify(input.state.answers)}`
+      : "";
+
+    const userPurpose = input.state.userPurpose ? `\nUSER PURPOSE: ${input.state.userPurpose}` : "";
+
+    const prompt = `${CURRICULUM_SYSTEM_PROMPT}
+
+TOPIC: ${input.state.goal.title}${userPurpose}${answersBlock}${researchBlock}
+
+Draft a 10-15 module specialist-level curriculum. Ground it in the research provided.`;
+
     const text = await this.llm.generate(prompt);
     if (!text) {
       return {

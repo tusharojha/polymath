@@ -75,7 +75,8 @@ Return a single JSON object with this exact structure:
            "type": "component",
            "componentName": "Button",
            "props": { "children": "Submit", "className": "btn btn-solid w-full" },
-           "onSubmit": "Description of intent for the Brain (e.g. 'User submitted the form, next do this: <next action>')"
+           "onSubmit": "Description of intent for the Brain (e.g. 'User submitted the form, next do this: <next action>')",
+           "sduiAction": "submit-answers" // EXPLICIT ACTION: Use 'submit-answers' for questionnaire submission
         }
       ]
     }
@@ -196,7 +197,11 @@ Return ONLY valid JSON.
 
   private composeLearningSurface(state: any): any {
     const step = state.activeStep;
-    const title = step?.title ?? state.goal?.title ?? "Learning";
+    const unitId = step?.unitId;
+    const teachingContent = unitId ? state.knowledgeRepository?.[unitId] : null;
+
+    const title = teachingContent?.title ?? step?.title ?? state.goal?.title ?? "Learning";
+    const explanation = teachingContent?.explanation ?? step?.rationale ?? "Loading content...";
 
     // Create artifacts section
     const artifacts = (state.recentSignals || [])
@@ -208,50 +213,44 @@ Return ONLY valid JSON.
         props: { className: "p-4 bg-surface rounded-lg border border-border mb-4 card", children: art.description }
       }));
 
+    // Create interjections section
+    const interjections = (teachingContent?.interjections || []).map((ij: any, idx: number) => ({
+      type: "flex",
+      flexBoxProperties: { className: "p-6 bg-accent/5 rounded-xl border border-accent/20 my-6 flex-col gap-3" },
+      contents: [
+        { type: "component", componentName: "Text", props: { children: `? ${ij.question}`, className: "font-bold text-accent italic" } },
+        { type: "component", componentName: "Text", props: { children: ij.answer, className: "text-fg" } },
+        { type: "component", componentName: "Text", props: { children: `Motivation: ${ij.motivation}`, className: "text-xs text-fgSubtle" } }
+      ]
+    }));
+
     return {
       pageContext: {
-        purposeOfThisRender: "Present learning material",
-        predictedNextAction: "User will read or click next"
+        purposeOfThisRender: "Present first-principles lesson",
+        predictedNextAction: "User will follow the logic or explore senses"
       },
-      state: {}, // No input state needed for read-only, but maybe for interactive elements later
+      state: {},
       components: [
         {
           type: "flex",
           flexBoxProperties: { className: "flex-col gap-6 p-8" },
           contents: [
-            {
-              type: "component",
-              componentName: "Heading",
-              props: { children: title, className: "text-3xl font-bold text-fg tracking-tight" }
-            },
-            {
-              type: "component",
-              componentName: "Text",
-              props: { children: step?.rationale ?? "Loading content...", className: "text-lg text-fgMuted leading-relaxed" }
-            },
+            { type: "component", componentName: "Heading", props: { children: title, className: "text-3xl font-bold text-fg tracking-tight" } },
+            { type: "component", componentName: "Text", props: { children: explanation, className: "text-lg text-fgMuted leading-relaxed markdown-content" } },
+            ...interjections,
             {
               type: "flex",
               flexBoxProperties: { className: "flex-col gap-4 mt-6" },
               contents: artifacts.length ? artifacts : [
-                { type: "component", componentName: "Text", props: { children: "No specific artifacts yet.", className: "italic text-fgSubtle" } }
+                { type: "component", componentName: "Text", props: { children: "Senses active: Gathering visuals and data...", className: "italic text-fgSubtle" } }
               ]
             },
             {
               type: "flex",
               flexBoxProperties: { className: "flex-row gap-4 mt-8" },
               contents: [
-                {
-                  type: "component",
-                  componentName: "Button",
-                  props: { children: "Next Unit", className: "btn btn-solid" },
-                  onSubmit: "Advance to the next module"
-                },
-                {
-                  type: "component",
-                  componentName: "Button",
-                  props: { children: "Deep Dive", className: "btn btn-ghost" },
-                  onSubmit: "Request detailed explanation"
-                }
+                { type: "component", componentName: "Button", props: { children: "Next Concept", className: "btn btn-solid" }, onSubmit: "Advance to the next unit" },
+                { type: "component", componentName: "Button", props: { children: "Deep Dive", className: "btn btn-ghost" }, onSubmit: "Request specialized details" }
               ]
             }
           ]

@@ -12,6 +12,7 @@ import {
   LearningStepBuilderAgent,
   RevisionDepthAgent,
   SynthesisAgent,
+  TeachingAgent,
   UIBuilderAgent,
 } from "@polymath/agents";
 import { BrainMemory } from "./memory";
@@ -83,6 +84,7 @@ export class BrainRuntime {
         new LearningStepBuilderAgent(llm),
         new RevisionDepthAgent(),
         new SynthesisAgent(),
+        new TeachingAgent(llm),
         new UIBuilderAgent(llm),
       ],
       initialState: store.get(),
