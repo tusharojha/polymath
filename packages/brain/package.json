@@ -1,0 +1,20 @@
+{
+  "name": "@polymath/brain",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@langchain/langgraph": "^0.3.0",
+    "@polymath/agents": "workspace:*",
+    "@polymath/core": "workspace:*",
+    "@polymath/senses": "workspace:*",
+    "sql.js": "^1.8.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/sql.js": "^1.4.9"
+  }
+}

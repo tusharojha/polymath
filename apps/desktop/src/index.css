@@ -1,0 +1,73 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+
+  html,
+  body {
+    @apply bg-backgroundSubtle text-fg antialiased font-sans leading-relaxed tracking-tight;
+  }
+}
+
+@layer components {
+  .card {
+    @apply bg-white rounded-2xl shadow-lg p-8;
+  }
+
+  .btn {
+    @apply font-medium rounded-md transition duration-100 ease-in-out focus-visible:ring-4 focus-visible:ring-blue-500/35 outline-none;
+  }
+
+  .btn-solid {
+    @apply bg-accent text-white hover:bg-accentHover active:bg-accentPressed;
+  }
+
+  .btn-ghost {
+    @apply text-accent hover:bg-accentSoft;
+  }
+
+  .input,
+  .textarea {
+    @apply bg-surfaceElevated border border-border rounded-md focus-visible:border-accent focus-visible:ring-4 focus-visible:ring-blue-500/35 outline-none px-4 py-2;
+  }
+
+  .thinking-card {
+    position: relative;
+    border-radius: 14px;
+    padding: 16px;
+    z-index: 0;
+  }
+
+  .thinking-card::before {
+    content: "";
+    position: absolute;
+    inset: -2px;
+    border-radius: inherit;
+
+    background: conic-gradient(from var(--angle),
+        #6366f1,
+        #4f46e5,
+        #a5b4fc,
+        #6366f1);
+
+    animation: rotate-gradient 3s linear infinite;
+    z-index: -2;
+  }
+
+  .thinking-card::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: #ffffff;
+    z-index: -1;
+  }
+
+  @keyframes rotate-gradient {
+    to {
+      --angle: 360deg;
+    }
+  }
+
+}

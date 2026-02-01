@@ -1,0 +1,23 @@
+{
+	"name": "polymath",
+	"private": true,
+	"type": "module",
+	"workspaces": [
+		"packages/*",
+		"apps/*"
+	],
+	"scripts": {
+		"dev": "pnpm --filter @polymath/desktop dev",
+		"build": "pnpm --filter @polymath/desktop build",
+		"preview": "pnpm --filter @polymath/desktop preview",
+		"start": "pnpm --filter @polymath/desktop start"
+	},
+	"dependencies": {
+		"@openai/codex": "^0.93.0"
+	},
+	"devDependencies": {
+		"autoprefixer": "^10.4.24",
+		"postcss": "^8.5.6",
+		"tailwindcss": "^4.1.18"
+	}
+}
